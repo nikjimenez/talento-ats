@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Talento ATS — Recruitment Colombia</title>
+<meta name="description" content="Applicant tracking system for a recruitment operation in Colombia.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<!-- Tokens first: everything else reads its variables. -->
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/components.css">
+<link rel="stylesheet" href="css/layout.css">
+</head>
+<body>
+
+<!-- Single mount point. The interface is built from js/main.js -->
+<div id="app" data-booting="true">
+  <div class="boot">
+    <div class="boot-mark">T</div>
+    <p class="boot-text">Loading Talento ATS…</p>
+  </div>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<!-- One entry module; the rest is imported in a chain. -->
+<script type="module" src="js/main.js"></script>
+
+<noscript>
+  <div class="noscript">This application requires JavaScript to be enabled.</div>
+</noscript>
+</body>
+</html>

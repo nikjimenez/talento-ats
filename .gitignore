@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment — NEVER commit credentials
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Python (CV extractor)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.Python
+*.egg-info/
+
+# Logs and temporary files
+*.log
+npm-debug.log*
+logs/
+tmp/
+.cache/
+
+# Operating system
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~
+
+# Claude Code local settings — machine-specific, may carry personal details
+.claude/settings.local.json
+
+# Local storage for uploaded documents (phase 6)
+# services/storage.js writes to <cwd>/.storage unless STORAGE_PATH is set
+.storage/
+server/.storage/
+server/storage/
+uploads/
+
+# Build artefacts
+dist/
+build/
+coverage/

@@ -1,0 +1,91 @@
+/* ─────────────────────────────────────────────────────────────
+   tokens.css — the single source of visual truth.
+   Derived from the Industry design system and retuned to the
+   product's theme: orange primary, dark grey secondary, white
+   background, Inter, rounded corners and soft shadows.
+   No other file may declare a colour, font or measurement.
+   ───────────────────────────────────────────────────────────── */
+
+:root {
+  /* Roles */
+  --color-bg: #ffffff;
+  --color-surface: #f6f7f9;
+  --color-text: #1a1d21;
+  --color-accent: #f26522;
+  --color-divider: color-mix(in srgb, #1a1d21 13%, transparent);
+
+  /* Orange ramp — primary action, selection, emphasis */
+  --color-accent-100: #fff4ed;
+  --color-accent-200: #ffe4d4;
+  --color-accent-300: #ffc7a5;
+  --color-accent-400: #fda471;
+  --color-accent-500: #f8813f;
+  --color-accent-600: #e0561a;
+  --color-accent-700: #c04c10;
+  --color-accent-800: #8f3a12;
+  --color-accent-900: #22262b;
+
+  /* Dark grey ramp — navigation, inverted fields, toast */
+  --color-neutral-100: #f6f7f9;
+  --color-neutral-200: #eceef1;
+  --color-neutral-300: #dcdfe4;
+  --color-neutral-400: #b9bec6;
+  --color-neutral-500: #8b929c;
+  --color-neutral-600: #646b75;
+  --color-neutral-700: #454b54;
+  --color-neutral-800: #2e333a;
+  --color-neutral-900: #22262b;
+
+  /* State — two values per role: dot/border (≥3:1) and text (≥4.5:1) */
+  --color-ok: #177d4e;        --color-ok-text: #146b43;
+  --color-warn: #b7791f;      --color-warn-text: #8a5a11;
+  --color-err: #c02f2f;       --color-err-text: #b02a2a;
+  --color-info: #2f6fd0;      --color-info-text: #2a63ba;
+  --color-off: #8b929c;       --color-off-text: #5f6672;
+
+  /* Typography */
+  --font-body: "Inter", system-ui, -apple-system, sans-serif;
+  --font-heading: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --text-xs: 11.5px;
+  --text-sm: 12.5px;
+  --text-base: 14px;
+  --text-lg: 16px;
+  --text-xl: 21px;
+  --text-2xl: 27px;
+  --text-3xl: 33px;
+
+  /* Spacing — base 8 */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Shape and elevation */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+
+  --shadow-sm: 0 1px 2px rgba(26,29,33,.06), 0 1px 3px rgba(26,29,33,.05);
+  --shadow-md: 0 4px 12px rgba(26,29,33,.08), 0 1px 3px rgba(26,29,33,.05);
+  --shadow-lg: 0 16px 40px rgba(26,29,33,.14), 0 2px 8px rgba(26,29,33,.06);
+
+  /* Motion */
+  --ease: cubic-bezier(.4, 0, .2, 1);
+  --dur-fast: 150ms;
+  --dur: 200ms;
+
+  /* Frame measurements */
+  --nav-width: 232px;
+  --nav-width-collapsed: 62px;
+  --panel-width: 328px;
+  --header-height: 56px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 0ms; --dur: 0ms; }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "talento-ats-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Backend del ATS Talento — construido por fases, sin colisiones entre ellas.",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "migrate": "node migrate.js",
+    "migrate:status": "node migrate.js status",
+    "seed": "node seed.js",
+    "setup": "npm run migrate && npm run seed",
+    "dev": "node --watch index.js",
+    "dev:all": "bash dev.sh",
+    "extractor:install": "python3 -m venv extractor/.venv && extractor/.venv/bin/pip install -r extractor/requirements.txt",
+    "extractor": "extractor/.venv/bin/uvicorn extractor:app --app-dir extractor --port 8100",
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "argon2": "^0.41.1",
+    "pg": "^8.13.1"
+  }
+}
