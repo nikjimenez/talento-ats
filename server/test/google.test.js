@@ -9,6 +9,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { query, one, pool } from '../db.js';
+import { cifrar } from '../lib/crypto.js';
 import * as google from '../services/google.js';
 
 test('rutaSegura: accepts a same-app relative path', () => {
@@ -102,4 +103,43 @@ test('estado: a genuinely connected user reports state 3, with the account email
   assert.equal(out.conectado, true);
   assert.equal(out.revocado, false);
   assert.equal(out.cuenta, 'recruiter@example.invalid');
+});
+
+/* cancelarEvento(): a real DB row with a genuinely encrypted (not the
+   placeholder 'x' used above) access token, so tokenVigente() actually
+   decrypts something real. Only the network call to Google itself is
+   stubbed — everything else, including AES-256-GCM round-tripping the
+   token, is real. This is the regression test for the bug live testing
+   surfaced: a failed DELETE from Google must not be swallowed into a
+   silent "cancelled locally, still live on the real calendar" state. */
+test('cancelarEvento: a real Google API failure throws — it must not be swallowed into a false the caller never checks', async (t) => {
+  if (!google.configurado()) return t.skip('GOOGLE_CLIENT_ID/SECRET not set in this environment');
+
+  await query('DELETE FROM oauth_credentials WHERE user_id = $1', [userId]);
+  await query(
+    `INSERT INTO oauth_credentials
+       (user_id, provider, account_email, access_encrypted, refresh_encrypted, scopes, expires_at)
+     VALUES ($1,'google','recruiter@example.invalid',$2,$2,'calendar.events', now() + interval '1 hour')`,
+    [userId, cifrar('fake-access-token-for-this-test')]);
+
+  const originalFetch = global.fetch;
+  global.fetch = async () => new Response('{"error":"insufficient permission"}', { status: 403 });
+  try {
+    await assert.rejects(() => google.cancelarEvento(userId, 'some-event-id'));
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('cancelarEvento: a 410 (already deleted on Google\'s side) is treated as success, not a failure', async (t) => {
+  if (!google.configurado()) return t.skip('GOOGLE_CLIENT_ID/SECRET not set in this environment');
+
+  const originalFetch = global.fetch;
+  global.fetch = async () => new Response(null, { status: 410 });
+  try {
+    const out = await google.cancelarEvento(userId, 'some-event-id');
+    assert.equal(out, true);
+  } finally {
+    global.fetch = originalFetch;
+  }
 });

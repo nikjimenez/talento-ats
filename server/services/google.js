@@ -311,11 +311,14 @@ export const crearEvento = async (userId, {
 
 export const cancelarEvento = async (userId, eventId) => {
   const token = await tokenVigente(userId);
-  if (!token) return false;
+  if (!token) return false;   // no hay nada que hacer sin cuenta conectada — la cancelación local sigue
   const res = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}?sendUpdates=all`,
     { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
-  return res.ok || res.status === 410;   // 410 = ya estaba borrado
+  if (!res.ok && res.status !== 410) {   // 410 = ya estaba borrado, no es un fallo real
+    throw bad('Could not cancel the event in Google Calendar.');
+  }
+  return true;
 };
 
 export const moverEvento = async (userId, eventId, { inicio, duracionMin = 45, zona = 'America/Bogota' }) => {
