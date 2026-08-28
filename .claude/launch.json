@@ -2,9 +2,12 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "talento-app",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8080", "--directory", "app"],
+      "name": "talento-frontend",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /private/tmp && exec python3 -m http.server 8080 --directory '/Users/nicolasjimenez/Documents/ Prueba 4/talento-ats/app'"
+      ],
       "port": 8080
     }
   ]
