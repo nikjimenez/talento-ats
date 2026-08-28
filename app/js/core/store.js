@@ -50,6 +50,14 @@ export const state = {
   scheduleFor: null,
   scheduleForm: {},
   googleConnected: false,
+  /* Fuller status for the Integrations settings page — the four states
+     services/google.js's estado() now distinguishes: not configured by
+     the admin, configured but never connected, connected, or connected
+     once and since revoked. null until the first status fetch resolves. */
+  googleConfigured: null,
+  googleRevoked: false,
+  googleAccount: null,
+  googleSince: null,
   /* Interview assistant */
   evalFor: null,
   evalForm: {},

@@ -24,6 +24,7 @@ import { scheduleDialog, scheduleDefaults } from './views/schedule.js';
 import { interviewsView, evalDialog, evalDefaults, CRITERIOS, RECOMENDACIONES } from './views/interviews.js';
 import { reportsView } from './views/reports.js';
 import { adminView, userDialog } from './views/admin.js';
+import { settingsView } from './views/settings.js';
 import { fecha } from './domain/format.js';
 
 /** Uniform timestamp for the events created during a session. */
@@ -236,7 +237,7 @@ registerActions({
   'google-disconnect': async () => {
     try {
       await repo.googleDisconnect();
-      set({ googleConnected: false });
+      set({ googleConnected: false, googleRevoked: false, googleAccount: null, googleSince: null });
       toast('Google Calendar disconnected.');
     } catch (err) {
       toast(err.message || 'Could not disconnect Google Calendar.');
@@ -808,7 +809,8 @@ const VIEWS = {
   campanas: campaignsView,
   entrevistas: interviewsView,
   reportes: reportsView,
-  admin: adminView
+  admin: adminView,
+  integraciones: settingsView
 };
 
 const stub = (titulo, cuerpo, ic) => html`
@@ -913,11 +915,23 @@ const resolverRetornoGoogle = async () => {
   /* Drop the parameters so a refresh does not replay the message. */
   if (resultado) window.history.replaceState({}, '', window.location.pathname);
 
+  await refrescarEstadoGoogle();
+};
+
+/** Pulls the full four-state status (not just the boolean the schedule
+    dialog needs) — used at boot and by the Integrations settings page. */
+const refrescarEstadoGoogle = async () => {
   try {
     const estado = await repo.googleStatus();
-    set({ googleConnected: !!estado?.conectado });
+    set({
+      googleConnected: !!estado?.conectado,
+      googleConfigured: estado?.configurado ?? false,
+      googleRevoked: !!estado?.revocado,
+      googleAccount: estado?.cuenta || null,
+      googleSince: estado?.desde || null
+    });
   } catch {
-    set({ googleConnected: false });
+    set({ googleConnected: false, googleConfigured: false, googleRevoked: false, googleAccount: null, googleSince: null });
   }
 };
 

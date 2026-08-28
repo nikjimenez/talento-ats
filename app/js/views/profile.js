@@ -38,6 +38,60 @@ const healthPanel = (c) => {
     </section>`;
 };
 
+/** "3:00 PM – 4:00 PM" from an ISO start + a duration in minutes. Nothing
+    client-side formats a time of day yet — domain/format.js's fecha()
+    only ever handled the date part. */
+const rangoHora = (iso, minutos) => {
+  const ini = new Date(iso);
+  if (Number.isNaN(+ini)) return '';
+  const fin = new Date(ini.getTime() + minutos * 60_000);
+  const hora = (d) => {
+    const h = d.getHours(), m = String(d.getMinutes()).padStart(2, '0');
+    return `${h % 12 || 12}:${m} ${h < 12 ? 'AM' : 'PM'}`;
+  };
+  return `${hora(ini)} – ${hora(fin)}`;
+};
+
+const INTERVIEW_SEM = { Agendada: 'ok', Reprogramada: 'warn', Realizada: 'ok', Cancelada: 'err', 'No asistió': 'err' };
+
+/** The Google Calendar integration's payoff screen: the actual event, not
+    a link buried in a timeline entry. Only the most recent interview is
+    shown prominently — the rest of the history is still in the timeline
+    below, same as it always was. */
+const interviewCard = (c) => {
+  const lista = c.entrevistas || [];
+  if (!lista.length) return '';
+  const i = lista[0];
+  const sem = INTERVIEW_SEM[i.estado] || 'warn';
+
+  return html`
+    <section>
+      <h6 style="margin-bottom:10px">Interview</h6>
+      <div class="card">
+        <div class="u-row" style="align-items:flex-start;gap:10px">
+          <div class="u-grow">
+            <strong class="u-sm" style="display:block">${i.tipo} · ${c.cargo}</strong>
+            <p class="u-sm u-muted" style="margin-top:4px">
+              ${fecha(i.cuando)}${i.cuando ? raw(` · ${rangoHora(i.cuando, i.duracion)}`) : ''}</p>
+            <p class="u-xs u-dim" style="margin-top:2px">Interviewer: ${i.entrevistador || 'Unassigned'}</p>
+          </div>
+          <span class="status status--${sem} u-xs">
+            <span class="dot" style="background:var(--color-${sem})"></span>${i.estado}</span>
+        </div>
+        <div class="u-row u-wrap" style="gap:8px;margin-top:14px">
+          ${i.meet ? raw(html`
+            <a class="btn btn--primary btn--sm" href="${i.meet}" target="_blank" rel="noopener noreferrer">
+              ${raw(icon('calendar', 13))} Join Google Meet</a>`) : ''}
+          ${i.enlaceCalendario ? raw(html`
+            <a class="btn btn--sm" href="${i.enlaceCalendario}" target="_blank" rel="noopener noreferrer">
+              Open Google Calendar</a>`) : ''}
+          ${!i.meet && !i.enlaceCalendario ? raw(html`
+            <span class="u-xs u-dim">Scheduled without Google Calendar — no link on file.</span>`) : ''}
+        </div>
+      </div>
+    </section>`;
+};
+
 const ESTADO_SEM = { Validado: 'ok', Rechazado: 'err', Recibido: 'warn', Pendiente: 'warn' };
 
 /**
@@ -231,6 +285,8 @@ export const profileView = (s) => {
 
       <div class="profile__main u-col" style="gap:26px">
         ${raw(healthPanel(c))}
+
+        ${raw(interviewCard(c))}
 
         ${raw(documentsSection(c))}
 

@@ -100,6 +100,7 @@ const userPopover = (s) => html`
     </div>
     <button class="popover__item" data-action="pending" data-arg="perfil">${raw(icon('users', 15))} My profile</button>
     <button class="popover__item" data-action="pending" data-arg="seguridad">${raw(icon('shield', 15))} Security</button>
+    <button class="popover__item" data-action="go" data-arg="integraciones">${raw(icon('calendar', 15))} Integrations</button>
     <button class="popover__item" data-action="sign-out" style="border-top:1px solid var(--color-divider)">${raw(icon('logout', 15))} Sign out</button>
   </div>`;
 

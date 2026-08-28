@@ -12,6 +12,7 @@
 import { query, one, tx } from '../db.js';
 import { candidato, evento, nota, tarea, documento, cedula as fmtCedula } from './mapper.js';
 import * as dup from './duplicates.js';
+import * as entrevistas from './interviews.js';
 import { log } from '../lib/audit.js';
 import { bad, notFound, conflict } from '../lib/http.js';
 
@@ -35,7 +36,7 @@ export const obtener = async (candidateId) => {
   const r = await one(`${SQL_CANDIDATO} WHERE c.candidate_id = $1`, [candidateId]);
   if (!r) throw notFound('That candidate does not exist');
 
-  const [detalle, skills, apps, eventos, docs, notas, tareas] = await Promise.all([
+  const [detalle, skills, apps, eventos, docs, notas, tareas, entrevistasCand] = await Promise.all([
     one('SELECT * FROM candidate_details WHERE candidate_id = $1', [candidateId]),
     query('SELECT kind, name, level FROM candidate_skills WHERE candidate_id = $1 ORDER BY kind, name', [candidateId]),
     query(
@@ -60,7 +61,8 @@ export const obtener = async (candidateId) => {
     query(
       `SELECT t.* FROM tasks t
          JOIN applications a ON a.application_id = t.application_id
-        WHERE a.candidate_id = $1 AND t.status = 'Pendiente' ORDER BY t.due_date`, [candidateId])
+        WHERE a.candidate_id = $1 AND t.status = 'Pendiente' ORDER BY t.due_date`, [candidateId]),
+    entrevistas.paraCandidato(candidateId)
   ]);
 
   return {
@@ -85,6 +87,7 @@ export const obtener = async (candidateId) => {
       abierta: !a.closed_at, resultado: a.outcome
     })),
     timeline: eventos.map(evento),
+    entrevistas: entrevistasCand,
     documentos: docs.map(documento),
     notas: notas.map(nota),
     tareas: tareas.map(tarea)

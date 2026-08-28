@@ -115,6 +115,7 @@ const aCandidato = (c) => ({
   portafolio: c.portafolio ?? null,
   aplicaciones: c.aplicaciones || [],
   timeline: c.timeline || [],
+  entrevistas: c.entrevistas || [],
   documentos: c.documentos,
   notas: c.notas || [],
   tareas: c.tareas || [],

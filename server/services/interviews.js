@@ -78,10 +78,10 @@ export const agendar = async ({
     const r = await t.one(
       `INSERT INTO interviews
          (application_id, kind, scheduled_at, duration_min, mode, interviewer,
-          gcal_event_id, gcal_meet_link)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING interview_id`,
+          gcal_event_id, gcal_meet_link, gcal_html_link)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING interview_id`,
       [applicationId, tipo, inicio, duracionMin, modo, actor,
-       evento.eventId, evento.meet]);
+       evento.eventId, evento.meet, evento.enlace]);
 
     await t.query(
       `INSERT INTO timeline_events (application_id, event_type, title, description, actor)
@@ -188,6 +188,27 @@ export const cancelar = async (interviewId, { motivo }, { userId, actor, ip }) =
   await log({ event: 'Interview cancelled', username: actor, ip, severity: 'warn',
     entityType: 'interview', entityId: interviewId, metadata: { motivo } });
   return { ok: true };
+};
+
+/** All of one candidate's interviews, most recent first — feeds the
+    profile's Interview card (Join Meet / Open Calendar). */
+export const paraCandidato = async (candidateId) => {
+  const filas = await query(
+    `SELECT i.* FROM interviews i
+       JOIN applications a ON a.application_id = i.application_id
+      WHERE a.candidate_id = $1
+      ORDER BY i.scheduled_at DESC`, [candidateId]);
+  return filas.map((r) => ({
+    id: r.interview_id,
+    tipo: r.kind,
+    cuando: r.scheduled_at,
+    duracion: r.duration_min,
+    modo: r.mode,
+    entrevistador: r.interviewer,
+    estado: r.status,
+    meet: r.gcal_meet_link,
+    enlaceCalendario: r.gcal_html_link
+  }));
 };
 
 /** The recruiter's agenda. Feeds the Interviews view. */

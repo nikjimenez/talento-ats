@@ -30,6 +30,20 @@ export const configurado = () => !!(CLIENT_ID && CLIENT_SECRET);
 
 /* ── Step 1: authorisation link ── */
 
+/* redirect_to only ever needs to send the browser back into this same
+   app — never accepted as an absolute URL. Without this check, a state
+   row built from ?volver=https://evil.example/phish would carry through
+   completely unvalidated to the 302 the OAuth callback later issues
+   (routes/integrations.js), turning the real, legitimate Google consent
+   screen into the front half of an open-redirect phishing chain: the
+   victim did just authenticate for real, then lands somewhere that
+   isn't us. Nothing in this app's own UI ever sends ?volver= today —
+   found by reading the callback's redirect logic, not by it firing. */
+export const rutaSegura = (v) => {
+  if (!v || typeof v !== 'string') return null;
+  return /^\/(?!\/)/.test(v) ? v : null;
+};
+
 export const urlAutorizacion = async (userId, redirectTo) => {
   if (!configurado()) {
     throw bad('Google Calendar is not configured on the server. '
@@ -42,7 +56,7 @@ export const urlAutorizacion = async (userId, redirectTo) => {
   await query(
     `INSERT INTO oauth_states (state, user_id, provider, redirect_to, expires_at)
      VALUES ($1, $2, 'google', $3, now() + interval '10 minutes')`,
-    [state, userId, redirectTo || null]);
+    [state, userId, rutaSegura(redirectTo)]);
 
   const p = new URLSearchParams({
     client_id: CLIENT_ID,
@@ -173,16 +187,28 @@ const tokenVigente = async (userId) => {
   return t.access_token;
 };
 
+/**
+ * Four states, not two: "never connected" and "was connected, Google (or
+ * the recruiter) revoked it" used to collapse into the same
+ * `conectado: false` — both tokenVigente()'s refresh failure and
+ * desconectar() just set revoked_at, and this query only ever looked at
+ * rows where it was NULL. The UI could not tell "connect for the first
+ * time" from "reconnect, something broke" apart, so it showed the same
+ * generic prompt for both.
+ */
 export const estado = async (userId) => {
-  if (!configurado()) return { configurado: false, conectado: false };
+  if (!configurado()) return { configurado: false, conectado: false, revocado: false };
   const c = await one(
-    `SELECT account_email, connected_at FROM oauth_credentials
-      WHERE user_id = $1 AND provider = 'google' AND revoked_at IS NULL`, [userId]);
+    `SELECT account_email, connected_at, revoked_at FROM oauth_credentials
+      WHERE user_id = $1 AND provider = 'google'
+      ORDER BY connected_at DESC LIMIT 1`, [userId]);
+  const conectado = !!c && !c.revoked_at;
   return {
     configurado: true,
-    conectado: !!c,
-    cuenta: c?.account_email || null,
-    desde: c?.connected_at || null
+    conectado,
+    revocado: !!c && !conectado,
+    cuenta: conectado ? c.account_email : null,
+    desde: conectado ? c.connected_at : null
   };
 };
 
@@ -252,12 +278,35 @@ export const crearEvento = async (userId, {
     throw bad('Google Calendar rejected the event. Check the date and time.', 'evento_fallido');
   }
 
-  const ev = await res.json();
-  return {
-    eventId: ev.id,
-    enlace: ev.htmlLink,
-    meet: ev.hangoutLink || ev.conferenceData?.entryPoints?.find((e) => e.entryPointType === 'video')?.uri || null
-  };
+  let ev = await res.json();
+
+  /* Google usually resolves a new hangoutsMeet conference in the same
+     response, but its own docs are explicit that createRequest can come
+     back with status.statusCode "pending" — the room is still being
+     provisioned. Polling events.get a few times a beat apart is the
+     documented way to pick up the finished conferenceData; skipping this
+     is how an interview would get created with no Meet link and nobody
+     would know why until the recruiter opened Calendar to check. */
+  const pendiente = (e) => conMeet && e.conferenceData?.createRequest
+    && e.conferenceData.createRequest.status?.statusCode === 'pending';
+
+  for (let intento = 0; pendiente(ev) && intento < 5; intento++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    const r2 = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/primary/events/${ev.id}`,
+      { headers: { Authorization: `Bearer ${token}` } });
+    if (r2.ok) ev = await r2.json();
+  }
+
+  const meet = ev.hangoutLink
+    || ev.conferenceData?.entryPoints?.find((e) => e.entryPointType === 'video')?.uri
+    || null;
+
+  if (conMeet && !meet) {
+    console.warn('[google] event created but no Meet link resolved after polling:', ev.id);
+  }
+
+  return { eventId: ev.id, enlace: ev.htmlLink, meet };
 };
 
 export const cancelarEvento = async (userId, eventId) => {
