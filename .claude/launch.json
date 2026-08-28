@@ -18,6 +18,15 @@
         "export PATH=\"$HOME/.local/node/bin:$PATH\"; cd '/Users/nicolasjimenez/Documents/ Prueba 4/talento-ats' && exec npx --yes serve -p 8080 --single app"
       ],
       "port": 8080
+    },
+    {
+      "name": "talento-extractor",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": [
+        "-c",
+        "cd \"$HOME/.local/talento-extractor-src\" && exec \"$HOME/.local/talento-extractor-venv/bin/uvicorn\" extractor:app --host 127.0.0.1 --port 8100 --log-level warning --loop asyncio --http h11"
+      ],
+      "port": 8100
     }
   ]
 }

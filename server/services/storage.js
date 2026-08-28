@@ -46,6 +46,23 @@ const detectar = (buf) => {
   return null;
 };
 
+/** Exported so other entry points (routes/cv.js) can check "is this
+    really a PDF" against the same magic bytes, instead of duplicating
+    the signature elsewhere. */
+export const esPdfReal = (buf) => detectar(buf) === 'application/pdf';
+
+/** ext → mime, the reverse of PERMITIDOS — the signed link only carries
+    the storage key (routes/documents.js's file route has no other record
+    of what the file actually is), and the extension is the one thing
+    already inside it. Serving everything as application/octet-stream
+    made every browser download instead of display it — no PDF a
+    recruiter opened ever rendered inline, it only ever offered a save
+    dialog. */
+export const mimePorExtension = (ext) => {
+  const entrada = Object.entries(PERMITIDOS).find(([, e]) => e === ext);
+  return entrada ? entrada[0] : 'application/octet-stream';
+};
+
 export const validar = ({ buffer, mimeDeclarado, nombre }) => {
   if (!buffer?.length) throw bad('The file is empty');
   if (buffer.length > MAX_BYTES) throw bad('The file is larger than 10 MB', 'muy_grande');

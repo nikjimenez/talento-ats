@@ -21,7 +21,14 @@ export const telefono = (v) => {
 
 /** 2026-08-06 → 6 Aug 2026 */
 export const fecha = (iso) => {
-  const p = String(iso ?? '').split('-');
+  /* pg returns DATE columns as full ISO timestamps ("1994-03-14T05:00:00.000Z"),
+     not the bare "1994-03-14" this used to assume — splitting the whole
+     string on "-" tore the time off into p[2] ("14T05:00:00.000Z") and
+     Number() of that is NaN. The first 10 characters are the date in
+     either shape, so slicing before splitting handles both. This was
+     never caught before because nothing had ever actually saved a
+     candidate's birth date through a working create flow. */
+  const p = String(iso ?? '').slice(0, 10).split('-');
   if (p.length < 3) return String(iso ?? '');
   return `${Number(p[2])} ${MONTHS[Number(p[1]) - 1]} ${p[0]}`;
 };

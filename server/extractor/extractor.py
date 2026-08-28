@@ -108,6 +108,23 @@ RE_FIJO = re.compile(r"(?:\+?57[\s.-]?)?\(?([1-8])\)?[\s.-]?(\d{3})[\s.-]?(\d{4}
 
 RE_EMAIL = re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]{2,}\b")
 
+RE_LINKEDIN = re.compile(
+    r"(?:https?://)?(?:[a-z]{2,3}\.)?linkedin\.com/in/[\w\-À-ÿ%]+/?", re.IGNORECASE
+)
+
+# A bare URL not already claimed by LinkedIn or an email — the closest thing
+# to "portfolio / personal website" that is safe to extract without
+# guessing: it either matches literally, or it does not.
+RE_URL = re.compile(
+    r"\b(?:https?://)?(?:www\.)?[a-z0-9][\w-]*(?:\.[a-z0-9][\w-]*)*\.[a-z]{2,}(?:/[^\s,;()<>]*)?",
+    re.IGNORECASE,
+)
+
+DOMINIOS_CORREO = (
+    "gmail.com", "outlook.com", "hotmail.com", "yahoo.com", "yahoo.es",
+    "icloud.com", "live.com", "protonmail.com",
+)
+
 RE_FECHA = re.compile(
     r"\b(\d{1,2})[/\-\s]+(?:de\s+)?"
     r"(ene|feb|mar|abr|may|jun|jul|ago|sep|set|oct|nov|dic|\d{1,2})"
@@ -211,6 +228,8 @@ class Extraccion:
     universidad: str | None = None
     experiencia: float | None = None
     cargoActual: str | None = None
+    linkedin: str | None = None
+    portafolio: str | None = None
     habilidades: list[str] = field(default_factory=list)
     idiomas: list[str] = field(default_factory=list)
     certificaciones: list[str] = field(default_factory=list)
@@ -265,6 +284,47 @@ def extraer_email(texto: str) -> tuple[str | None, float]:
         if not re.search(r"@(empresa|company|corp)\.", correo, re.IGNORECASE):
             return correo.lower(), 0.95
     return correos[0].lower(), 0.8
+
+
+def extraer_linkedin(texto: str) -> tuple[str | None, float]:
+    m = RE_LINKEDIN.search(texto)
+    if not m:
+        return None, 0.0
+    url = m.group(0)
+    if not url.lower().startswith("http"):
+        url = "https://" + url
+    return url.rstrip("/"), 0.95
+
+
+def extraer_portafolio(texto: str) -> tuple[str | None, float]:
+    """The one URL in the document that is neither LinkedIn nor an email
+    domain. Deliberately narrow: a personal site or portfolio link is
+    either unambiguous, or it is left blank — this is not the place to
+    guess between three plausible URLs."""
+    candidatos = []
+    for m in RE_URL.finditer(texto):
+        url = m.group(0)
+        bajo = url.lower()
+        if "linkedin.com" in bajo or "@" in url:
+            continue
+        # The regex's URL character class does not include "@", so it stops
+        # BEFORE the "@" in an email address and never sees it — checked
+        # against the match text alone, "andrea.rojas.test@gmail.com" and
+        # "andrea.rojas.test" (a plausible-looking domain-shaped fragment)
+        # are indistinguishable. The only way to tell them apart is to look
+        # at what follows the match in the source text.
+        if texto[m.end():m.end() + 1] == '@':
+            continue
+        if any(bajo.endswith(d) or f"{d}/" in bajo for d in DOMINIOS_CORREO):
+            continue
+        candidatos.append(url)
+
+    if len(candidatos) != 1:
+        return None, 0.0
+    url = candidatos[0]
+    if not url.lower().startswith("http"):
+        url = "https://" + url
+    return url.rstrip("/"), 0.7
 
 
 def extraer_nombre(texto: str) -> tuple[str | None, str | None, float]:
@@ -449,6 +509,8 @@ def analizar(texto: str) -> Extraccion:
     r.educacion, r.universidad, c_edu = extraer_educacion(texto)
     r.experiencia, c_exp = extraer_experiencia(texto)
     r.cargoActual, c_cargo = extraer_cargo(texto)
+    r.linkedin, c_linkedin = extraer_linkedin(texto)
+    r.portafolio, c_portafolio = extraer_portafolio(texto)
 
     r.habilidades = extraer_habilidades(texto)
     r.idiomas = extraer_idiomas(texto)
@@ -458,6 +520,7 @@ def analizar(texto: str) -> Extraccion:
         "nombre": c_nombre, "cedula": c_cedula, "tel": c_tel, "email": c_email,
         "ubicacion": c_ubic, "nacimiento": c_nac, "educacion": c_edu,
         "experiencia": c_exp, "cargoActual": c_cargo,
+        "linkedin": c_linkedin, "portafolio": c_portafolio,
         "habilidades": 0.75 if r.habilidades else 0.0,
         "idiomas": 0.8 if r.idiomas else 0.0,
     }

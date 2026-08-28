@@ -106,3 +106,21 @@ test('verificar: rejects garbage input without throwing', () => {
   assert.equal(storage.verificar(''), null);
   assert.equal(storage.verificar(undefined), null);
 });
+
+/* Regression: the file-serving route served every document as
+   application/octet-stream regardless of what it actually was, which
+   makes every browser download instead of display it — the resume
+   viewer's iframe never rendered anything, silently. */
+test('mimePorExtension: recovers the real MIME from the stored file extension', () => {
+  assert.equal(storage.mimePorExtension('.pdf'), 'application/pdf');
+  assert.equal(storage.mimePorExtension('.jpg'), 'image/jpeg');
+  assert.equal(storage.mimePorExtension('.png'), 'image/png');
+  assert.equal(storage.mimePorExtension('.doc'), 'application/msword');
+  assert.equal(storage.mimePorExtension('.docx'),
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+});
+
+test('mimePorExtension: an unrecognised extension falls back to a safe default, not a throw', () => {
+  assert.equal(storage.mimePorExtension('.exe'), 'application/octet-stream');
+  assert.equal(storage.mimePorExtension(''), 'application/octet-stream');
+});

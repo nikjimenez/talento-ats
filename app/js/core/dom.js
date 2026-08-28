@@ -71,6 +71,24 @@ export const initDelegation = (root) => {
     const fn = actions.get(el.dataset.input);
     if (fn) fn(el.value, el, ev);
   });
+
+  /* File drag-and-drop: [data-dropzone="name"] fires the registered action
+     with the dropped File (not a value string, the object itself — the
+     action decides what to do with it, same as a file <input>'s change
+     handler reading ev.target.files[0]). dragover must preventDefault or
+     the browser refuses the drop entirely. */
+  root.addEventListener('dragover', (ev) => {
+    if (ev.target.closest('[data-dropzone]')) ev.preventDefault();
+  });
+  root.addEventListener('drop', (ev) => {
+    const el = ev.target.closest('[data-dropzone]');
+    if (!el) return;
+    ev.preventDefault();
+    const file = ev.dataTransfer?.files?.[0];
+    if (!file) return;
+    const fn = actions.get(el.dataset.dropzone);
+    if (fn) fn(file, el, ev);
+  });
 };
 
 /** Returns the last edited field so render() can restore focus and caret. */

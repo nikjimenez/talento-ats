@@ -86,6 +86,7 @@ export const extraer = async ({ buffer, nombre, mime }, { actor, ip } = {}) => {
       nacimiento: datos.nacimiento, educacion: datos.educacion,
       universidad: datos.universidad, experiencia: datos.experiencia,
       cargoActual: datos.cargoActual,
+      linkedin: datos.linkedin, portafolio: datos.portafolio,
       habilidades: datos.habilidades || [],
       idiomas: datos.idiomas || [],
       certificaciones: datos.certificaciones || []

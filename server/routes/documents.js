@@ -15,6 +15,7 @@
  *   POST   /api/v1/candidates/:id/hold          poner o quitar retención
  */
 
+import { extname } from 'node:path';
 import * as docs from '../services/documents.js';
 import * as storage from '../services/storage.js';
 import * as retention from '../services/retention.js';
@@ -88,11 +89,21 @@ export const routes = {
     try {
       const buf = await storage.leer(dato.clave);
       res.writeHead(200, {
-        'Content-Type': 'application/octet-stream',
+        /* octet-stream here made every browser download the file instead
+           of rendering it — Content-Disposition: inline only works with a
+           type the browser recognises as displayable. */
+        'Content-Type': storage.mimePorExtension(extname(dato.clave)),
         'Content-Disposition': 'inline',
         'Cache-Control': 'private, no-store',
         'X-Content-Type-Options': 'nosniff',
-        'Content-Security-Policy': "default-src 'none'; sandbox"
+        /* allow-scripts: Chrome's built-in PDF viewer is script-driven —
+           bare `sandbox` blocked it outright and the load just aborted,
+           silently, with no error surfaced anywhere. Everything else
+           sandbox restricts stays restricted: no allow-same-origin (no
+           access to the parent's cookies/storage even where this and the
+           app share an origin in production), no top-navigation, no
+           forms, no popups. */
+        'Content-Security-Policy': "default-src 'none'; sandbox allow-scripts"
       });
       res.end(buf);
     } catch {

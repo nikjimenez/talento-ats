@@ -9,12 +9,12 @@ import assert from 'node:assert/strict';
 import { query, one, pool, tx } from '../db.js';
 import * as dup from '../services/duplicates.js';
 
-test('migrations: all 8 are recorded, in order, and none has drifted from its checksum', async () => {
+test('migrations: all 9 are recorded, in order, and none has drifted from its checksum', async () => {
   const rows = await query('SELECT filename FROM schema_migrations ORDER BY filename');
   assert.deepEqual(rows.map((r) => r.filename), [
     '001_base_schema.sql', '002_recruitment.sql', '003_candidate_profile.sql',
     '004_process.sql', '005_access.sql', '006_search_indexes.sql',
-    '007_data_retention.sql', '008_integrations.sql'
+    '007_data_retention.sql', '008_integrations.sql', '009_candidate_links.sql'
   ]);
 });
 

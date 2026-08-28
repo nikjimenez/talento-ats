@@ -67,7 +67,21 @@ export const state = {
   candDialogOpen: false,
   candForm: {},
   candErrors: {},
-  candDuplicate: null
+  candDuplicate: null,
+  /* Create candidate from resume */
+  resumeDialogOpen: false,
+  resumeStep: 'upload',      // 'upload' | 'processing' | 'review' | 'unreadable' | 'saving'
+  resumeJobKey: '',
+  resumeFile: null,          // the real File object — kept in memory, never serialized
+  resumeStageLabel: '',
+  resumeExtract: null,       // raw /cv/extract response
+  resumeForm: {},
+  resumeErrors: {},
+  resumeDuplicate: null,
+  /* Candidate profile: resume viewer */
+  resumeViewerFor: null,     // document id currently open in the inline viewer
+  resumeViewerUrl: null,
+  replaceResumeFor: null     // candidate id whose "replace resume" file picker is open
 };
 
 export const subscribe = (fn) => {

@@ -276,6 +276,30 @@ const demo = {
     throw err;
   },
 
+  /* Resume parsing runs against a real Python service and real document
+     storage — same reasoning as Google above: no honest local fake. */
+  async cvStatus() {
+    return { disponible: false };
+  },
+  async extractCv() {
+    const err = new Error('Resume processing needs the server running. Start it and reload.');
+    err.codigo = 'sin_servidor';
+    throw err;
+  },
+  async listDocuments() {
+    return { documentos: [], faltantes: [], completos: 0, total: 0 };
+  },
+  async uploadDocument() {
+    const err = new Error('Uploading documents needs the server running. Start it and reload.');
+    err.codigo = 'sin_servidor';
+    throw err;
+  },
+  async documentLink() {
+    const err = new Error('Viewing documents needs the server running. Start it and reload.');
+    err.codigo = 'sin_servidor';
+    throw err;
+  },
+
   async listCampaigns() {
     return DB.CAMPAIGNS;
   },

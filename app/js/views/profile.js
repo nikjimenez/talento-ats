@@ -9,7 +9,10 @@ import { stageSem, scoreSem, nextStage } from '../domain/stages.js';
 import { iniciales, edadDesde, fecha } from '../domain/format.js';
 import { can } from '../core/auth.js';
 
-const DOCS = ['CV', 'National id', 'Employment certificates', 'Diploma', 'Medical certificate'];
+/* Labels shown to the recruiter vs. the `kind` the server stores
+   (services/documents.js TIPOS) — the frontend field-name contract. */
+const DOCS = [['CV', 'CV'], ['National id', 'National id'],
+  ['Employment certificates', 'Certificates'], ['Diploma', 'Diploma'], ['Medical certificate', 'Medical']];
 
 const healthPanel = (c) => {
   const faltantes = DOCS.length - c.docsOk;
@@ -34,6 +37,94 @@ const healthPanel = (c) => {
       </div>
     </section>`;
 };
+
+const ESTADO_SEM = { Validado: 'ok', Rechazado: 'err', Recibido: 'warn', Pendiente: 'warn' };
+
+/**
+ * Real document data (c.documentos, from services/documents.js via
+ * candidates.js's obtener()) — not the docsOk count that used to stand in
+ * for a document list here. Each row that actually exists offers "View";
+ * the CV row always offers "Upload"/"Replace", the one document kind this
+ * feature's spec calls out explicitly.
+ */
+const documentsSection = (c) => {
+  const docs = c.documentos || [];
+  const porTipo = new Map(docs.map((d) => [d.tipo, d]));
+  const validados = DOCS.filter(([, kind]) => porTipo.get(kind)?.estado === 'Validado').length;
+
+  return html`
+    <section>
+      <h6 style="margin-bottom:10px">Documents</h6>
+      <div class="stack stack--tight">
+        ${DOCS.map(([label, kind]) => {
+          const d = porTipo.get(kind);
+          const sem = d ? (ESTADO_SEM[d.estado] || 'warn') : 'warn';
+          return raw(html`
+            <div class="list-row" style="padding:9px 12px">
+              <span>${raw(icon('file', 14))}</span>
+              <span class="u-sm u-grow">
+                ${label}
+                ${d ? raw(`<span class="u-xs u-dim" style="display:block">${d.archivo} · uploaded ${d.subido || '—'}</span>`) : ''}
+              </span>
+              <span class="status status--${sem} u-xs">
+                <span class="dot" style="background:var(--color-${sem})"></span>
+                ${d ? d.estado : 'Not uploaded'}
+              </span>
+              <div class="u-row" style="gap:5px">
+                ${d ? raw(html`
+                  <button class="btn btn--sm btn--ghost" data-action="resume-view" data-arg="${d.id}">
+                    ${raw(icon('search', 12))} View</button>`) : ''}
+                ${kind === 'CV' ? raw(html`
+                  <button class="btn btn--sm btn--ghost" data-action="replace-resume-open" data-arg="${c.id}">
+                    ${d ? 'Replace' : 'Upload'}</button>`) : ''}
+              </div>
+            </div>`);
+        })}
+      </div>
+      ${validados < DOCS.length ? raw(html`
+        <button class="btn btn--block btn--sm" style="margin-top:8px" data-action="pending" data-arg="docs-whatsapp">
+          Request the missing ones over WhatsApp</button>`) : ''}
+    </section>`;
+};
+
+/** Inline PDF viewer — the signed link (routes/documents.js) already sets
+    Content-Disposition: inline and a sandboxed CSP built for exactly this:
+    the browser's native PDF viewer renders it in the iframe, with its own
+    page navigation, zoom and print/download controls, no extra library. */
+export const resumeViewerDialog = (s) => html`
+  <div class="backdrop" data-action="resume-viewer-backdrop">
+    <div class="dialog" role="dialog" aria-label="Resume" data-stop
+         style="height:88vh;display:flex;flex-direction:column">
+      <div class="dialog__head">
+        <div class="u-grow"><h3>Resume</h3></div>
+        <a class="btn btn--sm" href="${s.resumeViewerUrl}" target="_blank" rel="noopener noreferrer">
+          ${raw(icon('file', 13))} Open in a new tab</a>
+        <button class="btn btn--icon btn--ghost" data-action="resume-view-close" aria-label="Close">${raw(icon('x', 15))}</button>
+      </div>
+      <iframe src="${s.resumeViewerUrl}" title="Resume PDF" style="flex:1;border:0;width:100%;background:var(--color-neutral-100)"></iframe>
+    </div>
+  </div>`;
+
+export const replaceResumeDialog = (s) => html`
+  <div class="backdrop" data-action="replace-resume-backdrop">
+    <div class="dialog dialog--sm" role="dialog" aria-label="Replace resume" data-stop>
+      <div class="dialog__head">
+        <div class="u-grow"><h3>Replace resume</h3>
+          <p class="u-xs u-dim">The current file is kept until the new one finishes uploading.</p></div>
+        <button class="btn btn--icon btn--ghost" data-action="replace-resume-close" aria-label="Close">${raw(icon('x', 15))}</button>
+      </div>
+      <div class="dialog__body">
+        <label class="card card--flat" for="replace-resume-input"
+               style="border:2px dashed var(--color-neutral-300);text-align:center;padding:28px 16px;cursor:pointer;display:block">
+          <div style="margin-bottom:8px">${raw(icon('upload', 20))}</div>
+          <p class="u-sm">Click to choose a PDF file</p>
+          <p class="u-xs u-dim" style="margin-top:4px">PDF only · up to 10 MB</p>
+          <input type="file" id="replace-resume-input" accept="application/pdf,.pdf"
+                 data-change="replace-resume-pick" style="display:none">
+        </label>
+      </div>
+    </div>
+  </div>`;
 
 const timeline = (c, events) => {
   const base = [
@@ -80,15 +171,20 @@ export const profileView = (s) => {
   const NO_DATA = 'Not recorded in the database';
 
   const datos = [
-    ['National id', c.cedula], ['Phone', c.tel], ['Email', c.email],
+    ['National id', c.cedula], ['Phone', c.tel],
+    ['Alternate phone', c.telAlt || NO_DATA], ['Email', c.email],
     ['City', `${c.ciudad}, ${c.depto}`],
     ['Address', c.dir || NO_DATA],
     ['Date of birth', c.nac ? `${fecha(c.nac)} (${edad} years old)` : NO_DATA],
+    ['Current / most recent title', c.cargoActual || NO_DATA],
     ['Education', c.edu || NO_DATA],
+    ['Institution', c.universidad || NO_DATA],
     ['Experience', c.exp || NO_DATA],
     ['Languages', c.idiomas || NO_DATA],
     ['Availability', c.dispon || NO_DATA],
-    ['Current situation', c.situacion || NO_DATA]
+    ['Current situation', c.situacion || NO_DATA],
+    ['LinkedIn', c.linkedin ? raw(`<a href="${c.linkedin}" target="_blank" rel="noopener noreferrer">${c.linkedin}</a>`) : NO_DATA],
+    ['Portfolio', c.portafolio ? raw(`<a href="${c.portafolio}" target="_blank" rel="noopener noreferrer">${c.portafolio}</a>`) : NO_DATA]
   ];
   if (can('ver_salarios')) datos.push(['Salary expectation', c.sal || NO_DATA]);
   if (c.recDerivado) datos.push(['Data origin', 'Imported from seed · recruiter and date derived']);
@@ -136,23 +232,7 @@ export const profileView = (s) => {
       <div class="profile__main u-col" style="gap:26px">
         ${raw(healthPanel(c))}
 
-        <section>
-          <h6 style="margin-bottom:10px">Documents</h6>
-          <div class="stack stack--tight">
-            ${DOCS.map((d, i) => raw(html`
-              <div class="list-row" style="padding:9px 12px">
-                <span>${raw(icon('file', 14))}</span>
-                <span class="u-sm u-grow">${d}</span>
-                <span class="status status--${i < c.docsOk ? 'ok' : 'warn'} u-xs">
-                  <span class="dot" style="background:var(--color-${i < c.docsOk ? 'ok' : 'warn'})"></span>
-                  ${i < c.docsOk ? 'Validated' : 'Pending'}
-                </span>
-              </div>`))}
-          </div>
-          ${c.docsOk < DOCS.length ? raw(html`
-            <button class="btn btn--block btn--sm" style="margin-top:8px" data-action="pending" data-arg="docs-whatsapp">
-              Request the missing ones over WhatsApp</button>`) : ''}
-        </section>
+        ${raw(documentsSection(c))}
 
         ${raw(timeline(c, events))}
       </div>

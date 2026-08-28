@@ -4,7 +4,7 @@
  * includes; everything else arrives through imports.
  */
 
-import { HOY_STAMP, HOY_ISO } from './config.js';
+import { CONFIG, HOY_STAMP, HOY_ISO } from './config.js';
 import { repo, isDemo, connect, onSessionLost, onServerLost } from './data/repository.js';
 import { state, set, go, filterTo, toggleIn, subscribe } from './core/store.js';
 import { html, raw, mount, registerActions, initDelegation, toast, takeLastEdited, clearLastEdited } from './core/dom.js';
@@ -13,8 +13,11 @@ import { signIn, signOut, can, fullName } from './core/auth.js';
 import { loginView, forgotDialog } from './views/login.js';
 import { navPanel, header, tabBar } from './views/shell.js';
 import { dashboardView } from './views/dashboard.js';
-import { candidatesView, candidateDialog, candDefaults } from './views/candidates.js';
-import { profileView } from './views/profile.js';
+import {
+  candidatesView, candidateDialog, candDefaults,
+  resumeDialog, resumeDefaults, desdeExtraccion, MAX_RESUME_MB
+} from './views/candidates.js';
+import { profileView, resumeViewerDialog, replaceResumeDialog } from './views/profile.js';
 import { jobsView, jobDetailView, campaignsView, jobDialog, jobDefaults } from './views/jobs.js';
 import { paletteView, searchAll, flatRows } from './views/search.js';
 import { scheduleDialog, scheduleDefaults } from './views/schedule.js';
@@ -53,14 +56,82 @@ const PENDING = {
 };
 
 /* ─── Actions ─── */
+/**
+ * Opens the profile AND merges the full detail record into state.candidates
+ * — the profile view reads from that array (`s.candidates.find(...)`), and
+ * until now nothing ever fetched more than the timeline into it, so
+ * detail-only fields (documentos, notas, tareas, aplicaciones, linkedin,
+ * portafolio) were always undefined there. docsOk and score are protected
+ * explicitly: the detail query does not select those aggregates (the list
+ * query does), so a naive merge would silently null them out on the
+ * candidate row the LIST VIEW keeps using after the recruiter navigates
+ * back.
+ */
 const openCandidate = async (id) => {
-  const events = await repo.listEvents(Number(id));
-  set({ view: 'perfil', sel: Number(id), events, paletteOpen: false, notifOpen: false });
+  const detalle = await repo.getCandidate(Number(id));
+  if (!detalle) {
+    set({ view: 'perfil', sel: Number(id), events: [], paletteOpen: false, notifOpen: false });
+    return;
+  }
+  const idx = state.candidates.findIndex((c) => c.id === detalle.id);
+  const fusionado = idx >= 0
+    ? { ...state.candidates[idx], ...detalle,
+        docsOk: detalle.docsOk ?? state.candidates[idx].docsOk,
+        score: detalle.score ?? state.candidates[idx].score }
+    : detalle;
+  const candidates = idx >= 0
+    ? state.candidates.map((c, i) => (i === idx ? fusionado : c))
+    : state.candidates.concat(fusionado);
+  set({ view: 'perfil', sel: Number(id), events: detalle.timeline || [], candidates, paletteOpen: false, notifOpen: false });
 };
 
 const openJob = (key) => set({ view: 'vacante', selJob: key, paletteOpen: false, notifOpen: false });
 
 const refreshCandidates = async () => set({ candidates: await repo.listCandidates() });
+
+/**
+ * PDF-only, checked on the frontend as a first line of defence — the real
+ * gate is the backend's file-signature check (routes/cv.js for parsing,
+ * services/storage.js for the eventual upload), which does not trust the
+ * extension or the declared MIME any more than this does, it just also
+ * looks at the actual bytes.
+ */
+const validarResumePdf = (file) => {
+  if (!file) return 'A PDF file is required.';
+  const nombreOk = /\.pdf$/i.test(file.name || '');
+  const mimeOk = file.type === 'application/pdf' || file.type === '';
+  if (!nombreOk || !mimeOk) return 'Only PDF resumes are supported.';
+  if (file.size === 0) return 'The file is empty.';
+  if (file.size > MAX_RESUME_MB * 1024 * 1024) return `File exceeds the maximum allowed size (${MAX_RESUME_MB} MB).`;
+  return null;
+};
+
+/**
+ * The last step of both the resume-review save and its duplicate-forced
+ * variant: the candidate record already exists by the time this runs, so
+ * a failure here must never look like the whole thing failed — the record
+ * is real, only the attachment needs a retry.
+ */
+const adjuntarCV = async (candidato, sufijo = '') => {
+  await refreshCandidates();
+  const archivo = state.resumeFile;
+
+  if (archivo && candidato.aplicacionId) {
+    try {
+      await repo.uploadDocument(candidato.aplicacionId, 'CV', archivo);
+      set({ resumeDialogOpen: false, resumeErrors: {}, resumeDuplicate: null, resumeFile: null, resumeExtract: null });
+      toast(`${candidato.nombre} registered${sufijo} · resume attached`);
+    } catch (err) {
+      set({ resumeDialogOpen: false });
+      toast(`${candidato.nombre} was saved, but the resume could not be attached — `
+        + `try again from the candidate profile. ${err.message || ''}`.trim());
+    }
+  } else {
+    set({ resumeDialogOpen: false, resumeErrors: {}, resumeDuplicate: null, resumeFile: null, resumeExtract: null });
+    toast(`${candidato.nombre} registered${sufijo}.`);
+  }
+  await openCandidate(candidato.id);
+};
 
 const doLogin = async (ev) => {
   if (ev) ev.preventDefault();
@@ -468,6 +539,207 @@ registerActions({
     await openCandidate(Number(id));
   },
 
+  /* Create candidate from resume */
+  'resume-new': () => set({
+    resumeDialogOpen: true, resumeStep: 'upload', resumeErrors: {}, resumeDuplicate: null,
+    resumeFile: null, resumeExtract: null, resumeStageLabel: '',
+    resumeJobKey: state.view === 'vacante' ? (state.selJob || '') : '',
+    resumeForm: {}
+  }),
+  'resume-close': () => { if (state.resumeStep !== 'processing') set({ resumeDialogOpen: false }); },
+  'resume-backdrop': (_a, _el, ev) => {
+    if (state.resumeStep === 'processing') return;
+    if (!ev.target.closest('[data-stop]')) set({ resumeDialogOpen: false });
+  },
+  'resume-set-job': (v) => {
+    const errores = { ...state.resumeErrors };
+    delete errores.jobKey;
+    set({ resumeJobKey: v, resumeErrors: errores });
+  },
+
+  'resume-pick': (_v, _el, ev) => {
+    const file = ev.target.files?.[0];
+    ev.target.value = '';
+    if (!file) return;
+    const problema = validarResumePdf(file);
+    if (problema) return toast(problema);
+    const errores = { ...state.resumeErrors };
+    delete errores.archivo;
+    set({ resumeFile: file, resumeErrors: errores });
+  },
+  'resume-drop': (file) => {
+    const problema = validarResumePdf(file);
+    if (problema) return toast(problema);
+    const errores = { ...state.resumeErrors };
+    delete errores.archivo;
+    set({ resumeFile: file, resumeErrors: errores });
+  },
+  'resume-remove-file': () => set({ resumeFile: null }),
+
+  'resume-process': async () => {
+    const errores = {};
+    if (!state.resumeJobKey) errores.jobKey = 'Required';
+    if (!state.resumeFile) errores.archivo = 'A PDF file is required';
+    if (Object.keys(errores).length) {
+      set({ resumeErrors: errores });
+      toast('Select a job opening and a PDF resume first.');
+      return;
+    }
+
+    set({ resumeStep: 'processing', resumeStageLabel: 'Uploading resume…', resumeErrors: {} });
+
+    /* The real work is one request/response, not a series of server-sent
+       stages — but a spinner with no label reads as frozen. This walks the
+       label forward on its own clock while the request is in flight, and
+       stops the moment a real answer comes back; it never claims a
+       percentage it cannot back up. */
+    const etapas = ['Uploading resume…', 'Reading resume…', 'Extracting candidate information…'];
+    let paso = 0;
+    const reloj = setInterval(() => {
+      paso = Math.min(paso + 1, etapas.length - 1);
+      if (state.resumeStep === 'processing') set({ resumeStageLabel: etapas[paso] });
+    }, 900);
+
+    let resultado;
+    try {
+      resultado = await repo.extractCv(state.resumeFile);
+    } catch (err) {
+      clearInterval(reloj);
+      set({ resumeStep: 'upload' });
+      toast(err.codigo === 'formato' ? 'Only PDF resumes are supported.' : (err.message || 'Resume upload failed. Please try again.'));
+      return;
+    }
+    clearInterval(reloj);
+    set({ resumeStageLabel: 'Preparing candidate profile…' });
+
+    if (!resultado.disponible) {
+      set({
+        resumeStep: 'review', resumeExtract: null,
+        resumeForm: { ...resumeDefaults(state.resumeJobKey), origenCV: true }
+      });
+      toast('Resume processing is temporarily unavailable — enter the details manually. The PDF will still be attached.');
+      return;
+    }
+
+    if (!resultado.extraido) {
+      set({ resumeStep: 'unreadable', resumeExtract: resultado });
+      return;
+    }
+
+    set({
+      resumeStep: 'review', resumeExtract: resultado,
+      resumeForm: desdeExtraccion(resultado.datos, state.resumeJobKey)
+    });
+  },
+
+  'resume-back-to-upload': () => set({ resumeStep: 'upload' }),
+  'resume-manual': () => set({
+    resumeStep: 'review',
+    resumeForm: { ...resumeDefaults(state.resumeJobKey), origenCV: true }
+  }),
+
+  'resume-set': (v, el) => {
+    const campo = el.dataset.arg;
+    const errores = { ...state.resumeErrors };
+    delete errores[campo];
+    set({ resumeForm: { ...state.resumeForm, [campo]: v }, resumeErrors: errores });
+  },
+
+  'resume-save': async () => {
+    const f = state.resumeForm;
+    const errores = {};
+    if (!String(f.nombres || '').trim()) errores.nombres = 'Required';
+    if (!String(f.apellidos || '').trim()) errores.apellidos = 'Required';
+    if (!String(f.cedula || '').trim()) errores.cedula = 'Required';
+    if (!String(f.tel || '').trim()) errores.tel = 'Required';
+    if (!f.jobKey) errores.jobKey = 'Select a job opening';
+
+    if (Object.keys(errores).length) {
+      set({ resumeErrors: errores });
+      toast(`Check the highlighted ${Object.keys(errores).length === 1 ? 'field' : 'fields'}.`);
+      return;
+    }
+
+    const job = state.jobs.find((j) => j.key === f.jobKey);
+    let candidato;
+    try {
+      candidato = await repo.createCandidate(f, job);
+    } catch (err) {
+      if (err.codigo === 'duplicado') { set({ resumeDuplicate: err.duplicado }); return; }
+      /* The resume, the extracted draft and every edit stay in state — a
+         failed save is not a reason to make the recruiter start over. */
+      toast(err.message || 'Candidate could not be saved. Your extracted information has not been lost.');
+      return;
+    }
+
+    await adjuntarCV(candidato);
+  },
+
+  'resume-force': async () => {
+    const f = state.resumeForm;
+    const job = state.jobs.find((j) => j.key === f.jobKey);
+    let candidato;
+    try {
+      candidato = await repo.createCandidate({ ...f, forzar: true }, job);
+    } catch (err) {
+      toast(err.message || 'Candidate could not be saved. Your extracted information has not been lost.');
+      return;
+    }
+    await adjuntarCV(candidato, ' despite the duplicate warning');
+  },
+
+  'resume-view-duplicate': async (id) => {
+    set({ resumeDialogOpen: false, resumeErrors: {}, resumeDuplicate: null });
+    await openCandidate(Number(id));
+  },
+
+  /* Resume viewer / replace, from the candidate profile */
+  'resume-view': async (docId) => {
+    try {
+      const r = await repo.documentLink(docId);
+      /* r.url is server-relative ("/api/v1/documents/file/…") — correct
+         for a fetch() through repo.request(), which already prefixes
+         API_ORIGIN, but this one goes straight into an <iframe src> and
+         an <a href>, which the BROWSER resolves against the page's own
+         origin. In dev that is :8080, not the API's :3000, so the iframe
+         silently loaded this single-page app's own index.html instead of
+         the PDF — no error, just the wrong document. */
+      set({ resumeViewerFor: Number(docId), resumeViewerUrl: CONFIG.API_ORIGIN + r.url });
+    } catch (err) {
+      toast(err.message || 'Could not open the resume.');
+    }
+  },
+  'resume-view-close': () => set({ resumeViewerFor: null, resumeViewerUrl: null }),
+  'resume-viewer-backdrop': (_a, _el, ev) => {
+    if (!ev.target.closest('[data-stop]')) set({ resumeViewerFor: null, resumeViewerUrl: null });
+  },
+
+  'replace-resume-open': (id) => set({ replaceResumeFor: Number(id) }),
+  'replace-resume-close': () => set({ replaceResumeFor: null }),
+  'replace-resume-backdrop': (_a, _el, ev) => {
+    if (!ev.target.closest('[data-stop]')) set({ replaceResumeFor: null });
+  },
+  'replace-resume-pick': async (_v, _el, ev) => {
+    const file = ev.target.files?.[0];
+    ev.target.value = '';
+    if (!file) return;
+    const problema = validarResumePdf(file);
+    if (problema) return toast(problema);
+
+    const c = await repo.getCandidate(state.replaceResumeFor);
+    if (!c?.aplicacionId) { toast('This candidate has no open application to attach a resume to.'); return; }
+
+    try {
+      await repo.uploadDocument(c.aplicacionId, 'CV', file);
+    } catch (err) {
+      toast(err.message || 'Resume upload failed. Please try again.');
+      return;
+    }
+    set({ replaceResumeFor: null });
+    toast('Resume replaced.');
+    if (state.view === 'perfil' && state.sel === c.id) await openCandidate(c.id);
+  },
+
   pending: (key) => toast(PENDING[key] || 'This action is wired to its matching backend endpoint.')
 });
 
@@ -492,6 +764,11 @@ document.addEventListener('keydown', (ev) => {
   if (ev.key === 'Escape' && state.userDialogOpen) { set({ userDialogOpen: false }); return; }
   if (ev.key === 'Escape' && state.jobDialogOpen) { set({ jobDialogOpen: false }); return; }
   if (ev.key === 'Escape' && state.candDialogOpen) { set({ candDialogOpen: false, candDuplicate: null }); return; }
+  if (ev.key === 'Escape' && state.resumeDialogOpen && state.resumeStep !== 'processing') {
+    set({ resumeDialogOpen: false }); return;
+  }
+  if (ev.key === 'Escape' && state.resumeViewerFor) { set({ resumeViewerFor: null, resumeViewerUrl: null }); return; }
+  if (ev.key === 'Escape' && state.replaceResumeFor) { set({ replaceResumeFor: null }); return; }
   if (ev.key === 'Escape' && (state.notifOpen || state.userMenu)) { set({ notifOpen: false, userMenu: false }); return; }
   if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === 'k') {
     ev.preventDefault();
@@ -590,7 +867,10 @@ const render = () => {
     ${s.evalFor ? raw(evalDialog(s)) : ''}
     ${s.userDialogOpen ? raw(userDialog(s)) : ''}
     ${s.jobDialogOpen ? raw(jobDialog(s)) : ''}
-    ${s.candDialogOpen ? raw(candidateDialog(s)) : ''}`);
+    ${s.candDialogOpen ? raw(candidateDialog(s)) : ''}
+    ${s.resumeDialogOpen ? raw(resumeDialog(s)) : ''}
+    ${s.resumeViewerFor ? raw(resumeViewerDialog(s)) : ''}
+    ${s.replaceResumeFor ? raw(replaceResumeDialog(s)) : ''}`);
 
   restore();
 };

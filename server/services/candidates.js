@@ -74,6 +74,8 @@ export const obtener = async (candidateId) => {
     universidad: detalle?.university ?? null,
     aspiracion: detalle?.expected_salary ?? null,
     disponibilidad: detalle?.availability ?? null,
+    linkedin: detalle?.linkedin_url ?? null,
+    portafolio: detalle?.portfolio_url ?? null,
     habilidades: skills.filter((s) => s.kind === 'habilidad').map((s) => s.name),
     idiomas: skills.filter((s) => s.kind === 'idioma').map((s) => `${s.name} ${s.level || ''}`.trim()),
     certificaciones: skills.filter((s) => s.kind === 'certificacion').map((s) => s.name),
@@ -158,17 +160,20 @@ export const crear = async (datos, { actor, ip, forzar = false }) => {
 
     /* Detalle solo si viene algo; una fila vacía no aporta nada. */
     const tieneDetalle = datos.nacimiento || datos.direccion || datos.cargoActual
-      || datos.experiencia || datos.educacion || datos.aspiracion;
+      || datos.experiencia || datos.educacion || datos.aspiracion
+      || datos.linkedin || datos.portafolio;
     if (tieneDetalle) {
       await t.query(
         `INSERT INTO candidate_details
            (candidate_id, birth_date, gender, address, alt_phone, current_position,
-            years_experience, education_level, university, expected_salary, availability, employment_status)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+            years_experience, education_level, university, expected_salary, availability,
+            employment_status, linkedin_url, portfolio_url)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
         [c.candidate_id, datos.nacimiento || null, datos.genero || null, datos.direccion || null,
          datos.telAlt || null, datos.cargoActual || null, datos.experiencia || null,
          datos.educacion || null, datos.universidad || null, datos.aspiracion || null,
-         datos.disponibilidad || null, datos.situacion || null]);
+         datos.disponibilidad || null, datos.situacion || null,
+         datos.linkedin || null, datos.portafolio || null]);
     }
 
     for (const [kind, lista] of [['habilidad', datos.habilidades], ['idioma', datos.idiomas],
@@ -186,11 +191,22 @@ export const crear = async (datos, { actor, ip, forzar = false }) => {
        VALUES ($1,$2,$3,$4,$5,$6) RETURNING application_id`,
       [c.candidate_id, job.job_id, etapa, reclutador, datos.fuente || 'Manual', datos.refiere || null]);
 
-    /* Los cinco eventos automáticos, en el orden que la interfaz espera.
-       Se insertan al revés para que el más reciente quede arriba. */
+    /* Eventos automáticos, en el orden que la interfaz espera. Se insertan
+       al revés para que el más reciente quede arriba.
+
+       El evento de CV solo se registra cuando la creación de verdad vino de
+       un currículum: antes se escribía siempre, incluso para un registro
+       manual sin ningún archivo — una entrada de línea de tiempo que
+       afirmaba "extracted" sobre datos que el reclutador había tecleado a
+       mano. Tampoco asume que la extracción salió bien: un PDF ilegible
+       igual puede terminar aquí, con todo escrito a mano y el archivo
+       adjunto de todos modos — el texto no reclama nada que no pasó. */
     const eventos = [
       ['Created', 'Candidate created', 'Record created from the form', actor],
-      ['CV', 'CV uploaded', 'Personal details, experience and skills extracted', actor],
+      ...(datos.origenCV ? [[
+        'CV', 'Candidate created from an uploaded resume',
+        'The resume PDF is attached to this record', actor
+      ]] : []),
       ['Assignment', 'Assigned to a recruiter',
         `${asigManual ? 'Assigned manually' : 'Assigned automatically by workload'}: ${reclutador}`,
         asigManual ? actor : 'Automatic'],

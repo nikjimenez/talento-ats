@@ -103,11 +103,16 @@ const aCandidato = (c) => ({
   nac: 'nacimiento' in c ? c.nacimiento : undefined,
   exp: c.experiencia ?? null,
   edu: c.educacion ?? null,
+  universidad: c.universidad ?? null,
+  cargoActual: c.cargoActual ?? null,
+  telAlt: c.telAlt ?? null,
   idiomas: Array.isArray(c.idiomas) ? c.idiomas.join(', ') : c.idiomas ?? null,
   skills: c.habilidades || [],
   dispon: c.disponibilidad ?? null,
   situacion: c.situacion ?? null,
   fuente: c.fuente ?? null,
+  linkedin: c.linkedin ?? null,
+  portafolio: c.portafolio ?? null,
   aplicaciones: c.aplicaciones || [],
   timeline: c.timeline || [],
   documentos: c.documentos,
@@ -189,15 +194,26 @@ const deFormularioCandidato = (f, job) => ({
   genero: f.genero,
   direccion: f.dir,
   cargoActual: f.cargoActual,
-  experiencia: f.exp ? Number(String(f.exp).replace(/\D/g, '')) || null : null,
+  /* Keep the decimal point: 5.5 years must not become 55. Strips
+     everything else, so "5 years" and "5.5" both come through clean. */
+  experiencia: f.exp ? Number(String(f.exp).replace(/[^\d.]/g, '')) || null : null,
   educacion: f.edu,
   universidad: f.universidad,
   aspiracion: f.sal ? Number(String(f.sal).replace(/\D/g, '')) || null : null,
   disponibilidad: f.dispon,
   situacion: f.situacion,
-  habilidades: f.skills || [],
+  linkedin: f.linkedin || null,
+  portafolio: f.portafolio || null,
+  origenCV: !!f.origenCV,
+  /* candidateDialog passes these as arrays (there is no free-text skills
+     field there yet); the resume review form edits them as a single
+     comma-separated string, the same way idiomas already works — splitting
+     on every keystroke would fight the cursor while typing a second item. */
+  habilidades: Array.isArray(f.skills) ? f.skills
+    : f.skills ? String(f.skills).split(',').map((s) => s.trim()).filter(Boolean) : [],
   idiomas: f.idiomas ? String(f.idiomas).split(',').map((s) => s.trim()).filter(Boolean) : [],
-  certificaciones: f.certificaciones || [],
+  certificaciones: Array.isArray(f.certificaciones) ? f.certificaciones
+    : f.certificaciones ? String(f.certificaciones).split(',').map((s) => s.trim()).filter(Boolean) : [],
   reclutador: f.reclutador || '',
   fuente: f.fuente,
   refiere: f.refiere,

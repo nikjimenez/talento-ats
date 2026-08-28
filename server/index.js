@@ -83,7 +83,13 @@ const handler = async (req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      /* X-Doc-Kind / X-Doc-Name carry the binary uploads' metadata
+         (routes/cv.js, routes/documents.js) — a request that sends one
+         and lists only Content-Type here never leaves the browser at all,
+         no matter what the server would have done with it. This was
+         unreachable until something in the frontend actually called one
+         of those endpoints; nothing did before the resume-upload feature. */
+      'Access-Control-Allow-Headers': 'Content-Type, X-Doc-Kind, X-Doc-Name',
       'Access-Control-Max-Age': '86400'
     });
     return res.end();
