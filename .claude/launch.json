@@ -2,11 +2,20 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "talento-api",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": [
+        "-c",
+        "cd '/Users/nicolasjimenez/Documents/ Prueba 4/talento-ats/server' && exec \"$HOME/.local/node/bin/node\" --env-file-if-exists=.env index.js"
+      ],
+      "port": 3000
+    },
+    {
       "name": "talento-frontend",
       "runtimeExecutable": "/bin/sh",
       "runtimeArgs": [
         "-c",
-        "cd /private/tmp && exec python3 -m http.server 8080 --directory '/Users/nicolasjimenez/Documents/ Prueba 4/talento-ats/app'"
+        "export PATH=\"$HOME/.local/node/bin:$PATH\"; cd '/Users/nicolasjimenez/Documents/ Prueba 4/talento-ats' && exec npx --yes serve -p 8080 --single app"
       ],
       "port": 8080
     }

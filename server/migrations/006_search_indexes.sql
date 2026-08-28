@@ -14,6 +14,16 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE EXTENSION IF NOT EXISTS unaccent;
 
+-- unaccent() is STABLE, not IMMUTABLE: it resolves its dictionary at call
+-- time, so PostgreSQL refuses it inside an index expression. Pinning the
+-- dictionary explicitly makes the result depend only on the argument,
+-- which is what IMMUTABLE promises. Queries must call THIS function, not
+-- unaccent() directly, or the planner will not match the index.
+CREATE OR REPLACE FUNCTION immutable_unaccent(text)
+  RETURNS text
+  LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE AS
+$$ SELECT public.unaccent('public.unaccent'::regdictionary, $1) $$;
+
 -- Búsqueda exacta e indexada por los tres identificadores que un
 -- reclutador teclea de memoria.
 CREATE UNIQUE INDEX IF NOT EXISTS ux_cand_national_id ON candidates(national_id);
@@ -29,18 +39,18 @@ CREATE INDEX IF NOT EXISTS ix_cand_nid_digits
 
 -- Nombre por fragmento y sin tildes.
 CREATE INDEX IF NOT EXISTS ix_cand_name_trgm
-  ON candidates USING gin (lower(unaccent(full_name)) gin_trgm_ops);
+  ON candidates USING gin (lower(immutable_unaccent(full_name)) gin_trgm_ops);
 
 CREATE INDEX IF NOT EXISTS ix_cand_city  ON candidates(city);
 CREATE INDEX IF NOT EXISTS ix_cand_dept  ON candidates(department);
 
 CREATE INDEX IF NOT EXISTS ix_skill_name_trgm
-  ON candidate_skills USING gin (lower(unaccent(name)) gin_trgm_ops);
+  ON candidate_skills USING gin (lower(immutable_unaccent(name)) gin_trgm_ops);
 
 CREATE INDEX IF NOT EXISTS ix_job_title_trgm
-  ON job_openings USING gin (lower(unaccent(title)) gin_trgm_ops);
+  ON job_openings USING gin (lower(immutable_unaccent(title)) gin_trgm_ops);
 
 CREATE INDEX IF NOT EXISTS ix_note_body_trgm
-  ON notes USING gin (lower(unaccent(body)) gin_trgm_ops);
+  ON notes USING gin (lower(immutable_unaccent(body)) gin_trgm_ops);
 
 COMMIT;

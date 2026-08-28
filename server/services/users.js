@@ -38,7 +38,7 @@ const SQL_USER = `
 export const listar = async ({ q } = {}) => {
   const rows = q
     ? await query(
-        `${SQL_USER} WHERE lower(unaccent(u.first_name || ' ' || u.last_name)) LIKE lower(unaccent($1))
+        `${SQL_USER} WHERE lower(immutable_unaccent(u.first_name || ' ' || u.last_name)) LIKE lower(immutable_unaccent($1))
                         OR lower(u.username) LIKE $1 OR lower(u.email) LIKE $1
          ORDER BY u.active DESC, u.first_name`, [`%${q.toLowerCase()}%`])
     : await query(`${SQL_USER} ORDER BY u.active DESC, u.first_name`);

@@ -51,13 +51,13 @@ const construirFiltro = (f, params = []) => {
     const p = add(`%${texto.toLowerCase()}%`);
     const d = add(dig || '\u0000');
     w.push(`(
-      lower(unaccent(c.full_name)) LIKE lower(unaccent(${p}))
+      lower(immutable_unaccent(c.full_name)) LIKE lower(immutable_unaccent(${p}))
       OR lower(c.email) LIKE ${p}
       OR (${d} <> '\u0000' AND regexp_replace(c.national_id, '\\D', '', 'g') LIKE ${d} || '%')
       OR (${d} <> '\u0000' AND regexp_replace(c.phone, '\\D', '', 'g') LIKE '%' || ${d})
       OR EXISTS (SELECT 1 FROM candidate_skills s
                   WHERE s.candidate_id = c.candidate_id
-                    AND lower(unaccent(s.name)) LIKE lower(unaccent(${p})))
+                    AND lower(immutable_unaccent(s.name)) LIKE lower(immutable_unaccent(${p})))
     )`);
   }
 
@@ -154,7 +154,7 @@ export const global = async (texto, { alcance } = {}) => {
                 WHEN lower(c.email) LIKE $1                                     THEN 'email'
                 WHEN EXISTS (SELECT 1 FROM candidate_skills s
                               WHERE s.candidate_id = c.candidate_id
-                                AND lower(unaccent(s.name)) LIKE lower(unaccent($1))) THEN 'skill'
+                                AND lower(immutable_unaccent(s.name)) LIKE lower(immutable_unaccent($1))) THEN 'skill'
                 ELSE 'name'
               END AS campo
          FROM candidates c
@@ -162,13 +162,13 @@ export const global = async (texto, { alcance } = {}) => {
            SELECT * FROM applications a2 WHERE a2.candidate_id = c.candidate_id
             AND a2.closed_at IS NULL ORDER BY a2.applied_at DESC LIMIT 1) a ON true
          LEFT JOIN job_openings j ON j.job_id = a.job_id
-        WHERE lower(unaccent(c.full_name)) LIKE lower(unaccent($1))
+        WHERE lower(immutable_unaccent(c.full_name)) LIKE lower(immutable_unaccent($1))
            OR lower(c.email) LIKE $1
            OR ($2 <> '\u0000' AND regexp_replace(c.national_id,'\\D','','g') LIKE $2 || '%')
            OR ($2 <> '\u0000' AND regexp_replace(c.phone,'\\D','','g') LIKE '%' || $2)
            OR EXISTS (SELECT 1 FROM candidate_skills s
                        WHERE s.candidate_id = c.candidate_id
-                         AND lower(unaccent(s.name)) LIKE lower(unaccent($1)))
+                         AND lower(immutable_unaccent(s.name)) LIKE lower(immutable_unaccent($1)))
         LIMIT 6`, [like, d]),
 
     query(
@@ -176,19 +176,19 @@ export const global = async (texto, { alcance } = {}) => {
               (SELECT count(*) FROM applications a
                 WHERE a.job_id = j.job_id AND a.outcome = 'Contratado') AS contratados
          FROM job_openings j JOIN campaigns c ON c.campaign_id = j.campaign_id
-        WHERE lower(unaccent(j.title)) LIKE lower(unaccent($1))
-           OR lower(unaccent(c.name))  LIKE lower(unaccent($1))
+        WHERE lower(immutable_unaccent(j.title)) LIKE lower(immutable_unaccent($1))
+           OR lower(immutable_unaccent(c.name))  LIKE lower(immutable_unaccent($1))
         LIMIT 4`, [like]),
 
     query(
       `SELECT e.employee_id, e.position, e.status, c.full_name, c.candidate_id
          FROM employees e JOIN candidates c ON c.candidate_id = e.candidate_id
-        WHERE lower(unaccent(c.full_name)) LIKE lower(unaccent($1))
+        WHERE lower(immutable_unaccent(c.full_name)) LIKE lower(immutable_unaccent($1))
         LIMIT 3`, [like]),
 
     query(
       `SELECT campaign_id, name, client FROM campaigns
-        WHERE lower(unaccent(name)) LIKE lower(unaccent($1)) LIMIT 3`, [like])
+        WHERE lower(immutable_unaccent(name)) LIKE lower(immutable_unaccent($1)) LIMIT 3`, [like])
   ]);
 
   const grupos = [];

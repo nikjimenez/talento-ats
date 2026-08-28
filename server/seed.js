@@ -102,9 +102,9 @@ const run = async () => {
     for (const { campEs, shift, city, dept } of combos.values()) {
       const job = await t.one(
         `INSERT INTO job_openings (campaign_id, title, department, positions, schedule, city, dept_geo, status, published_at)
-         SELECT $1, $2, $3, 12, $4, $5, $6, 'Publicada', now()
+         SELECT $1::int, $2, $3, 12, $4::text, $5, $6, 'Publicada', now()
          WHERE NOT EXISTS (
-           SELECT 1 FROM job_openings WHERE campaign_id = $1 AND schedule = $4)
+           SELECT 1 FROM job_openings WHERE campaign_id = $1::int AND schedule = $4::text)
          RETURNING job_id`,
         [campMap.get(campEs), campEs, campEs, shift, city, dept]);
 

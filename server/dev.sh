@@ -20,6 +20,6 @@ extractor/.venv/bin/uvicorn extractor:app \
 
 sleep 1
 echo "→ servidor Node     http://localhost:3000"
-node --watch index.js &
+node --env-file-if-exists=.env --watch index.js &
 
 wait

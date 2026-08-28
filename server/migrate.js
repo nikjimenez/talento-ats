@@ -15,7 +15,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { pool } from './db.js';
 
 const DIR = join(dirname(fileURLToPath(import.meta.url)), 'migrations');
@@ -81,7 +81,11 @@ export const run = async ({ dryRun = false } = {}) => {
   }
 };
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+/* pathToFileURL, not string concatenation: a path containing spaces or
+   non-ASCII characters is percent-encoded in import.meta.url but raw in
+   argv[1], so the naive comparison never matches and the runner exits
+   silently having done nothing. */
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   run({ dryRun: process.argv[2] === 'status' })
     .then(() => pool.end())
     .catch((err) => { console.error('\n' + err.message); process.exit(1); });
