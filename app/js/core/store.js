@@ -58,7 +58,16 @@ export const state = {
   userQ: '',
   userDialogOpen: false,
   userForm: {},
-  userErrors: {}
+  userErrors: {},
+  /* New job opening */
+  jobDialogOpen: false,
+  jobForm: {},
+  jobErrors: {},
+  /* New candidate */
+  candDialogOpen: false,
+  candForm: {},
+  candErrors: {},
+  candDuplicate: null
 };
 
 export const subscribe = (fn) => {

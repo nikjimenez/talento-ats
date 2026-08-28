@@ -8,6 +8,11 @@ import { CONFIG } from '../config.js';
 import { ETAPAS, DEPARTAMENTOS, SHIFTS, stageSem, scoreSem } from '../domain/stages.js';
 import { iniciales, norm } from '../domain/format.js';
 
+export const candDefaults = (jobKey) => ({
+  nombres: '', apellidos: '', cedula: '', tel: '', email: '',
+  ciudad: '', depto: '', reclutador: '', fuente: 'Manual', jobKey: jobKey || ''
+});
+
 /** Applies every active filter. A candidate passes only if they meet all. */
 export const applyFilters = (s) => {
   const q = norm(s.q);
@@ -74,7 +79,7 @@ export const candidatesView = (s) => {
         </div>
         <div class="u-row" style="gap:8px">
           <button class="btn" data-action="pending" data-arg="exportar">Export</button>
-          <button class="btn btn--primary" data-action="pending" data-arg="nuevo-candidato">${raw(icon('plus', 15))} New candidate</button>
+          <button class="btn btn--primary" data-action="cand-new">${raw(icon('plus', 15))} New candidate</button>
         </div>
       </div>
 
@@ -150,5 +155,80 @@ export const candidatesView = (s) => {
           <p class="empty__body">Try removing a department, a stage or a shift from the filter.</p>
           <button class="btn btn--primary" data-action="clear-filters">Clear filters</button>
         </div>`)}
+    </div>`;
+};
+
+export const candidateDialog = (s) => {
+  const f = s.candForm;
+  const err = s.candErrors || {};
+  const dup = s.candDuplicate;
+
+  const campo = (key, id, label, opts = {}) => html`
+    <div class="field">
+      <label for="${id}">${label}${opts.req ? raw('<span class="req">*</span>') : ''}</label>
+      <input class="input ${err[key] ? 'input--err' : ''}" id="${id}" type="${opts.tipo || 'text'}"
+             value="${f[key] ?? ''}" data-input="cand-set" data-arg="${key}"
+             ${err[key] ? raw('aria-invalid="true"') : ''}>
+      ${err[key] ? raw(`<span class="field-hint field-hint--err">${err[key]}</span>`) : ''}
+    </div>`;
+
+  const select = (key, id, label, values, opts = {}) => html`
+    <div class="field">
+      <label for="${id}">${label}${opts.req ? raw('<span class="req">*</span>') : ''}</label>
+      <select class="input ${err[key] ? 'input--err' : ''}" id="${id}" data-change="cand-set" data-arg="${key}">
+        ${opts.placeholder ? raw(`<option value="" ${!f[key] ? 'selected' : ''}>${opts.placeholder}</option>`) : ''}
+        ${values.map((v) => raw(`<option value="${v}" ${f[key] === v ? 'selected' : ''}>${v}</option>`))}
+      </select>
+      ${err[key] ? raw(`<span class="field-hint field-hint--err">${err[key]}</span>`) : ''}
+    </div>`;
+
+  return html`
+    <div class="backdrop" data-action="cand-backdrop">
+      <div class="dialog dialog--md" role="dialog" aria-label="New candidate" data-stop>
+        <div class="dialog__head">
+          <div class="u-grow"><h3>New candidate</h3><p class="u-xs u-dim">Creates the record and their first application together.</p></div>
+          <button class="btn btn--icon btn--ghost" data-action="cand-close" aria-label="Close">${raw(icon('x', 15))}</button>
+        </div>
+
+        ${dup ? raw(html`
+          <div class="dialog__body">
+            <div class="alert alert--warn" style="align-items:flex-start">
+              <span>${raw(icon('alert', 15))}</span>
+              <div class="u-grow">
+                <strong class="u-sm" style="display:block;margin-bottom:4px">Possible duplicate</strong>
+                <p class="u-sm">${dup.aviso}</p>
+              </div>
+            </div>
+            <div class="dialog__foot" style="padding:14px 0 0">
+              <button class="btn btn--ghost" data-action="cand-close">Cancel</button>
+              <button class="btn" data-action="cand-view-duplicate" data-arg="${dup.id}">View existing record</button>
+              <button class="btn btn--primary" data-action="cand-force">Register anyway</button>
+            </div>
+          </div>`) : raw(html`
+        <div class="dialog__body grid grid--form">
+          <div class="field span-all">
+            <label for="cf-job">Job opening${raw('<span class="req">*</span>')}</label>
+            <select class="input ${err.jobKey ? 'input--err' : ''}" id="cf-job" data-change="cand-set" data-arg="jobKey">
+              <option value="" ${!f.jobKey ? 'selected' : ''}>Select an opening…</option>
+              ${s.jobs.map((j) => raw(
+                `<option value="${j.key}" ${f.jobKey === j.key ? 'selected' : ''}>${j.titulo} · ${j.campana}</option>`))}
+            </select>
+            ${err.jobKey ? raw(`<span class="field-hint field-hint--err">${err.jobKey}</span>`) : ''}
+          </div>
+          ${raw(campo('nombres', 'cf-nombres', 'First name', { req: true }))}
+          ${raw(campo('apellidos', 'cf-apellidos', 'Last name', { req: true }))}
+          ${raw(campo('cedula', 'cf-cedula', 'National id', { req: true }))}
+          ${raw(campo('tel', 'cf-tel', 'Phone', { req: true }))}
+          ${raw(campo('email', 'cf-email', 'Email', { tipo: 'email' }))}
+          ${raw(select('depto', 'cf-depto', 'Department', DEPARTAMENTOS))}
+          ${raw(campo('ciudad', 'cf-ciudad', 'City'))}
+          ${raw(select('reclutador', 'cf-reclutador', 'Recruiter', s.recruiters.map((r) => r.nombre),
+            { placeholder: 'Auto-assign by workload' }))}
+        </div>
+        <div class="dialog__foot">
+          <button class="btn btn--ghost" data-action="cand-close">Cancel</button>
+          <button class="btn btn--primary u-push" data-action="cand-save">${raw(icon('check', 15))} Register candidate</button>
+        </div>`)}
+      </div>
     </div>`;
 };

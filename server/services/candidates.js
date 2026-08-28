@@ -105,27 +105,38 @@ export const crear = async (datos, { actor, ip, forzar = false }) => {
   if (!String(datos.tel || '').trim()) throw bad('The phone number is required', 'tel');
   if (!datos.jobId) throw bad('The job opening is required', 'vacante');
 
-  if (!forzar) {
-    const hit = await dup.buscar({ cedula: datos.cedula, email: datos.email, telefono: datos.tel });
-    if (hit) {
-      const err = conflict(dup.aviso(hit), 'duplicado');
-      err.duplicado = {
-        candidatoId: hit.candidato.candidate_id,
-        nombre: hit.candidato.full_name,
-        cedula: fmtCedula(hit.candidato.national_id),
-        motivo: hit.motivo,
-        aplicaciones: hit.aplicaciones.map((a) => ({
-          vacante: a.job_title, campana: a.campaign_name, etapa: a.stage,
-          abierta: !a.closed_at, resultado: a.outcome
-        })),
-        vinculo: hit.vinculo && {
-          cargo: hit.vinculo.position, estado: hit.vinculo.status,
-          retiro: hit.vinculo.departure_date, motivo: hit.vinculo.reason,
-          recontratable: hit.vinculo.eligible_rehire
-        }
-      };
-      throw err;
-    }
+  const hit = await dup.buscar({ cedula: datos.cedula, email: datos.email, telefono: datos.tel });
+  if (hit && !forzar) {
+    const err = conflict(dup.aviso(hit), 'duplicado');
+    err.duplicado = {
+      candidatoId: hit.candidato.candidate_id,
+      nombre: hit.candidato.full_name,
+      cedula: fmtCedula(hit.candidato.national_id),
+      motivo: hit.motivo,
+      aplicaciones: hit.aplicaciones.map((a) => ({
+        vacante: a.job_title, campana: a.campaign_name, etapa: a.stage,
+        abierta: !a.closed_at, resultado: a.outcome
+      })),
+      vinculo: hit.vinculo && {
+        cargo: hit.vinculo.position, estado: hit.vinculo.status,
+        retiro: hit.vinculo.departure_date, motivo: hit.vinculo.reason,
+        recontratable: hit.vinculo.eligible_rehire
+      }
+    };
+    throw err;
+  }
+
+  /* A national id match is not "maybe the same person" the way a shared
+     phone or an old email can be: national_id carries a UNIQUE index
+     (migration 006), so forcing past it here would still hit a Postgres
+     constraint violation and surface as a raw 500. It also isn't what the
+     recruiter actually wants — the record already exists. Route a forced
+     cédula match to a new application on the EXISTING candidate instead
+     of attempting to create a second one. */
+  if (hit && forzar && hit.motivo === 'cedula') {
+    return agregarPostulacion(hit.candidato.candidate_id, {
+      jobId: datos.jobId, reclutador: datos.reclutador, fuente: datos.fuente
+    }, { actor, ip });
   }
 
   const job = await one(

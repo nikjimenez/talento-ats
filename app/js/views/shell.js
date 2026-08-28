@@ -116,7 +116,7 @@ export const header = (s) => {
       </button>
 
       ${can('editar_vacantes') ? raw(html`
-        <button class="btn btn--primary header__new" data-action="pending" data-arg="nueva-vacante">${raw(icon('plus', 15))} <span class="header__new-text">New opening</span></button>`) : ''}
+        <button class="btn btn--primary header__new" data-action="job-new">${raw(icon('plus', 15))} <span class="header__new-text">New opening</span></button>`) : ''}
 
       <div class="has-popover">
         <button class="btn btn--icon" data-action="toggle-notif" title="Notifications" style="position:relative">

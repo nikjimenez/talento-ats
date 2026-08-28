@@ -71,20 +71,21 @@ export const buscar = async ({ cedula, email, telefono }) => {
   return { candidato: hit, motivo: hit.motivo, aplicaciones, vinculo };
 };
 
-/** Texto del aviso, según lo que se encontró. */
+/** Warning text, depending on what was found. The interface is English —
+    see README § Language — this is not one of the declared exceptions. */
 export const aviso = ({ candidato, motivo, aplicaciones, vinculo }) => {
   if (vinculo) {
     return vinculo.departure_date
-      ? `${candidato.full_name} trabajó en la compañía hasta ${String(vinculo.departure_date).slice(0, 4)}`
+      ? `${candidato.full_name} worked at the company until ${String(vinculo.departure_date).slice(0, 4)}`
         + ` (${vinculo.position}).`
-        + (vinculo.eligible_rehire === false ? ' Marcado como NO recontratable.' : '')
-      : `${candidato.full_name} es empleado activo de la compañía (${vinculo.position}).`;
+        + (vinculo.eligible_rehire === false ? ' Marked as NOT eligible for rehire.' : '')
+      : `${candidato.full_name} is an active employee of the company (${vinculo.position}).`;
   }
   if (aplicaciones.length) {
     const a = aplicaciones[0];
-    return `${candidato.full_name} ya se postuló a ${a.job_title}`
-      + ` en ${String(a.applied_at).slice(0, 4)} · etapa ${a.stage}.`;
+    return `${candidato.full_name} already applied to ${a.job_title}`
+      + ` in ${String(a.applied_at).slice(0, 4)} · stage ${a.stage}.`;
   }
-  const porQue = { cedula: 'la misma cédula', email: 'el mismo correo', telefono: 'el mismo teléfono' }[motivo];
-  return `Existe un expediente con ${porQue}: ${candidato.full_name}.`;
+  const porQue = { cedula: 'the same national id', email: 'the same email', telefono: 'the same phone number' }[motivo];
+  return `A record already exists with ${porQue}: ${candidato.full_name}.`;
 };

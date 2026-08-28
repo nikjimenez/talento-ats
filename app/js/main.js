@@ -13,9 +13,9 @@ import { signIn, signOut, can, fullName } from './core/auth.js';
 import { loginView, forgotDialog } from './views/login.js';
 import { navPanel, header, tabBar } from './views/shell.js';
 import { dashboardView } from './views/dashboard.js';
-import { candidatesView } from './views/candidates.js';
+import { candidatesView, candidateDialog, candDefaults } from './views/candidates.js';
 import { profileView } from './views/profile.js';
-import { jobsView, jobDetailView, campaignsView } from './views/jobs.js';
+import { jobsView, jobDetailView, campaignsView, jobDialog, jobDefaults } from './views/jobs.js';
 import { paletteView, searchAll, flatRows } from './views/search.js';
 import { scheduleDialog, scheduleDefaults } from './views/schedule.js';
 import { interviewsView, evalDialog, evalDefaults, CRITERIOS, RECOMENDACIONES } from './views/interviews.js';
@@ -43,9 +43,7 @@ const NOTIFS = [
 /* ─── Messages for what does not exist without a backend yet ─── */
 const PENDING = {
   exportar: 'Excel export arrives with the backend (phase 4 of the plan).',
-  'nueva-vacante': 'The opening form is wired up in phase 3 (persistence).',
-  'nuevo-candidato': 'Candidate registration is wired up in phase 3 (persistence).',
-  'editar-vacante': 'Editing an opening requires database writes (phase 3).',
+  'editar-vacante': 'Editing an existing opening is not built yet — create a new one instead.',
   'exportar-auditoria': 'Audit export arrives with the persistent log (phase 5).',
   'docs-whatsapp': 'Sending over WhatsApp is an external integration (phase 7).',
   correo: 'Sending email is an external integration (phase 7).',
@@ -359,6 +357,117 @@ registerActions({
       : `User ${f.user} created · an invitation email is on its way`);
   },
 
+  /* New job opening */
+  'job-new': () => set({ jobDialogOpen: true, jobErrors: {}, jobForm: jobDefaults() }),
+  'job-close': () => set({ jobDialogOpen: false, jobErrors: {} }),
+  'job-backdrop': (_a, _el, ev) => { if (!ev.target.closest('[data-stop]')) set({ jobDialogOpen: false, jobErrors: {} }); },
+  'job-set': (v, el) => {
+    const campo = el.dataset.arg;
+    const errores = { ...state.jobErrors };
+    delete errores[campo];
+    set({ jobForm: { ...state.jobForm, [campo]: v }, jobErrors: errores });
+  },
+  'job-toggle': (_v, el) => set({ jobForm: { ...state.jobForm, [el.dataset.arg]: el.checked } }),
+  'job-save': async () => {
+    const f = state.jobForm;
+    const errores = {};
+    if (!String(f.titulo || '').trim()) errores.titulo = 'Required';
+    if (!f.campana) errores.campana = 'Required';
+    if (!(Number(f.cupos) > 0)) errores.cupos = 'Must be greater than zero';
+
+    if (Object.keys(errores).length) {
+      set({ jobErrors: errores });
+      toast(`Check the highlighted ${Object.keys(errores).length === 1 ? 'field' : 'fields'}.`);
+      return;
+    }
+
+    let job;
+    try {
+      job = await repo.createJob(f);
+    } catch (err) {
+      toast(err.message || 'The opening could not be created.');
+      return;
+    }
+
+    set({ jobDialogOpen: false, jobErrors: {}, jobs: await repo.listJobs() });
+    toast(f.draft ? `“${f.titulo}” saved as a draft` : `“${f.titulo}” published`);
+    openJob(job.key);
+  },
+
+  /* New candidate */
+  'cand-new': (jobKey) => set({
+    candDialogOpen: true, candErrors: {}, candDuplicate: null,
+    candForm: candDefaults(jobKey || (state.view === 'vacante' ? state.selJob : ''))
+  }),
+  'cand-close': () => set({ candDialogOpen: false, candErrors: {}, candDuplicate: null }),
+  'cand-backdrop': (_a, _el, ev) => {
+    if (!ev.target.closest('[data-stop]')) set({ candDialogOpen: false, candErrors: {}, candDuplicate: null });
+  },
+  'cand-set': (v, el) => {
+    const campo = el.dataset.arg;
+    const errores = { ...state.candErrors };
+    delete errores[campo];
+    set({ candForm: { ...state.candForm, [campo]: v }, candErrors: errores });
+  },
+  'cand-save': async () => {
+    const f = state.candForm;
+    const errores = {};
+    if (!String(f.nombres || '').trim()) errores.nombres = 'Required';
+    if (!String(f.apellidos || '').trim()) errores.apellidos = 'Required';
+    if (!String(f.cedula || '').trim()) errores.cedula = 'Required';
+    if (!String(f.tel || '').trim()) errores.tel = 'Required';
+    if (!f.jobKey) errores.jobKey = 'Required';
+
+    if (Object.keys(errores).length) {
+      set({ candErrors: errores });
+      toast(`Check the highlighted ${Object.keys(errores).length === 1 ? 'field' : 'fields'}.`);
+      return;
+    }
+
+    const job = state.jobs.find((j) => j.key === f.jobKey);
+    let candidato;
+    try {
+      candidato = await repo.createCandidate(f, job);
+    } catch (err) {
+      /* The human-readable explanation travels as the error message, not
+         inside `duplicado` — that object only carries structured fields
+         (routes/candidates.js builds the 409 as conflict(aviso, 'duplicado')
+         with `duplicado` attached separately, unlike the standalone
+         check-duplicate endpoint, whose response already nests `aviso`). */
+      if (err.codigo === 'duplicado') {
+        set({ candDuplicate: { ...err.duplicado, aviso: err.duplicado?.aviso || err.message } });
+        return;
+      }
+      toast(err.message || 'The candidate could not be registered.');
+      return;
+    }
+
+    set({ candDialogOpen: false, candErrors: {}, candDuplicate: null, candidates: await repo.listCandidates() });
+    toast(`${f.nombres} ${f.apellidos} registered · added to ${job ? job.titulo : 'the opening'}`);
+    await openCandidate(candidato.id);
+  },
+  /* The recruiter saw the duplicate and wants to register anyway — the
+     server accepts this once with `forzar`, matching the 409 dialog's
+     three ways out described in routes/candidates.js. */
+  'cand-force': async () => {
+    const f = state.candForm;
+    const job = state.jobs.find((j) => j.key === f.jobKey);
+    let candidato;
+    try {
+      candidato = await repo.createCandidate({ ...f, forzar: true }, job);
+    } catch (err) {
+      toast(err.message || 'The candidate could not be registered.');
+      return;
+    }
+    set({ candDialogOpen: false, candErrors: {}, candDuplicate: null, candidates: await repo.listCandidates() });
+    toast(`${f.nombres} ${f.apellidos} registered despite the duplicate warning`);
+    await openCandidate(candidato.id);
+  },
+  'cand-view-duplicate': async (id) => {
+    set({ candDialogOpen: false, candErrors: {}, candDuplicate: null });
+    await openCandidate(Number(id));
+  },
+
   pending: (key) => toast(PENDING[key] || 'This action is wired to its matching backend endpoint.')
 });
 
@@ -381,6 +490,8 @@ document.addEventListener('keydown', (ev) => {
   if (ev.key === 'Escape' && state.scheduleFor) { set({ scheduleFor: null }); return; }
   if (ev.key === 'Escape' && state.evalFor) { set({ evalFor: null }); return; }
   if (ev.key === 'Escape' && state.userDialogOpen) { set({ userDialogOpen: false }); return; }
+  if (ev.key === 'Escape' && state.jobDialogOpen) { set({ jobDialogOpen: false }); return; }
+  if (ev.key === 'Escape' && state.candDialogOpen) { set({ candDialogOpen: false, candDuplicate: null }); return; }
   if (ev.key === 'Escape' && (state.notifOpen || state.userMenu)) { set({ notifOpen: false, userMenu: false }); return; }
   if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === 'k') {
     ev.preventDefault();
@@ -477,7 +588,9 @@ const render = () => {
     ${s.paletteOpen ? raw(paletteView(s)) : ''}
     ${s.scheduleFor ? raw(scheduleDialog(s)) : ''}
     ${s.evalFor ? raw(evalDialog(s)) : ''}
-    ${s.userDialogOpen ? raw(userDialog(s)) : ''}`);
+    ${s.userDialogOpen ? raw(userDialog(s)) : ''}
+    ${s.jobDialogOpen ? raw(jobDialog(s)) : ''}
+    ${s.candDialogOpen ? raw(candidateDialog(s)) : ''}`);
 
   restore();
 };
