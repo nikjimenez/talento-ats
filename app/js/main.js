@@ -206,7 +206,7 @@ registerActions({
   schedule: async (id) => {
     const c = await repo.getCandidate(Number(id));
     if (!c) return;
-    set({ scheduleFor: Number(id), scheduleForm: scheduleDefaults(c) });
+    set({ scheduleFor: Number(id), scheduleForm: scheduleDefaults(c, state.googleAccount) });
   },
   'sch-close': () => set({ scheduleFor: null }),
   'sch-backdrop': (_a, _el, ev) => { if (!ev.target.closest('[data-stop]')) set({ scheduleFor: null }); },

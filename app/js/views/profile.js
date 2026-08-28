@@ -16,10 +16,14 @@ const DOCS = [['CV', 'CV'], ['National id', 'National id'],
 
 const healthPanel = (c) => {
   const faltantes = DOCS.length - c.docsOk;
+  /* Whether there is a real interview on file, not a guess from the
+     pipeline stage — a candidate can have a booked interview before the
+     stage catches up, and a stage name never actually meant "check the
+     calendar". Cancelled/no-show interviews don't count as scheduled. */
+  const tieneEntrevista = (c.entrevistas || []).some((e) => !['Cancelada', 'No asistió'].includes(e.estado));
   const items = [
     { label: 'Documents', v: `${c.docsOk} of ${DOCS.length}`, sem: faltantes === 0 ? 'ok' : faltantes <= 2 ? 'warn' : 'err' },
-    { label: 'Interview', v: ['First Interview', 'Second Interview'].includes(c.estado) ? 'Scheduled' : 'Not scheduled',
-      sem: ['First Interview', 'Second Interview'].includes(c.estado) ? 'ok' : 'warn' },
+    { label: 'Interview', v: tieneEntrevista ? 'Scheduled' : 'Not scheduled', sem: tieneEntrevista ? 'ok' : 'warn' },
     { label: 'Readiness', v: `${c.score} / 100`, sem: scoreSem(c.score) },
     { label: 'Recruiter', v: c.reclutador, sem: c.reclutador === 'Unassigned' ? 'err' : 'ok' },
     { label: 'Duplicates', v: 'No matches', sem: 'ok' }

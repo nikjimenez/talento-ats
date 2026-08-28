@@ -16,13 +16,17 @@ export const TIPOS = ['Phone Screening', 'First Interview', 'Second Interview', 
 export const DURACIONES = ['30 min', '45 min', '60 min'];
 export const MODOS = ['Google Meet', 'On site', 'Phone call'];
 
-export const scheduleDefaults = (c) => ({
+export const scheduleDefaults = (c, cuenta = null) => ({
   tipo: c && c.estado === 'CV Review' ? 'Phone Screening' : 'First Interview',
   fecha: '2026-08-13',
   hora: '10:00',
   duracion: '45 min',
   modo: 'Google Meet',
-  calendario: 'juan.valderrama@talento.co',
+  /* The event is always created on the connected user's own primary
+     Google calendar (server always calls calendars/primary — there is no
+     "pick a different calendar" capability), so this only ever reflects
+     whichever account is actually connected. Never a placeholder. */
+  calendario: cuenta || '',
   invitarCandidato: true,
   notifWhatsapp: true,
   recordatorio: true,
@@ -65,7 +69,7 @@ export const scheduleDialog = (s) => {
           ${conectado ? raw(html`
             <div class="alert alert--ok">
               <span>${raw(icon('check', 15))}</span>
-              <span class="u-grow">Google Calendar connected as <strong>${f.calendario}</strong></span>
+              <span class="u-grow">Google Calendar connected as <strong>${s.googleAccount || f.calendario}</strong></span>
               <button class="btn btn--sm btn--ghost" data-action="google-disconnect">Disconnect</button>
             </div>`) : raw(html`
             <div class="alert alert--warn">
@@ -80,7 +84,6 @@ export const scheduleDialog = (s) => {
             ${raw(campo('Date', 'fecha', 'date', `min="${HOY_ISO}"`))}
             ${raw(campo('Time', 'hora', 'time'))}
             ${raw(opciones('Format', 'modo', MODOS))}
-            ${raw(opciones('Calendar', 'calendario', [f.calendario, 'entrevistas@talento.co']))}
           </div>
 
           <div class="field">
