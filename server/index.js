@@ -7,9 +7,10 @@
  */
 
 import { createServer } from 'node:http';
-import { send, sendError, HttpError } from './lib/http.js';
+import { send, sendError, clientIp, HttpError } from './lib/http.js';
 import { attachUser } from './auth/middleware.js';
 import { purgeExpired } from './auth/sessions.js';
+import { check as rateLimitCheck } from './lib/rateLimit.js';
 import { pool } from './db.js';
 
 import { routes as authRoutes } from './routes/auth.js';
@@ -63,6 +64,22 @@ const handler = async (req, res) => {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Vary', 'Origin');
 
+  /* Baseline hardening headers on every response. The signed-link document
+     route (routes/documents.js) sets its own, tighter CSP on top of these
+     for the one response that ever serves third-party file bytes; it does
+     not repeat X-Frame-Options, which is why that path is excluded here —
+     a signed document link is designed to be embeddable by its token, not
+     by the app's own frame ancestors. */
+  const path = new URL(req.url, `http://${req.headers.host}`).pathname;
+  if (!path.startsWith('/api/v1/documents/file/')) {
+    res.setHeader('X-Frame-Options', 'DENY');
+  }
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+  }
+
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
@@ -72,8 +89,6 @@ const handler = async (req, res) => {
     return res.end();
   }
 
-  const path = new URL(req.url, `http://${req.headers.host}`).pathname;
-
   if (path === '/health') {
     try {
       await pool.query('SELECT 1');
@@ -81,6 +96,12 @@ const handler = async (req, res) => {
     } catch {
       return send(res, 503, { ok: false, error: 'Database unavailable' });
     }
+  }
+
+  const limited = rateLimitCheck(clientIp(req), path);
+  if (limited) {
+    res.setHeader('Retry-After', String(limited.retryAfterSec));
+    return send(res, 429, { error: 'Too many requests. Try again shortly.', code: 'demasiadas_solicitudes' });
   }
 
   const fn = resolver(req.method, path);

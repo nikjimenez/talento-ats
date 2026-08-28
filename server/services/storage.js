@@ -35,7 +35,8 @@ const FIRMAS = [
   { mime: 'application/pdf', bytes: [0x25, 0x50, 0x44, 0x46] },            // %PDF
   { mime: 'image/jpeg', bytes: [0xff, 0xd8, 0xff] },
   { mime: 'image/png', bytes: [0x89, 0x50, 0x4e, 0x47] },
-  { mime: 'application/zip', bytes: [0x50, 0x4b, 0x03, 0x04] }             // docx
+  { mime: 'application/zip', bytes: [0x50, 0x4b, 0x03, 0x04] },            // docx
+  { mime: 'application/msword', bytes: [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1] } // .doc (OLE2)
 ];
 
 const detectar = (buf) => {
@@ -52,9 +53,16 @@ export const validar = ({ buffer, mimeDeclarado, nombre }) => {
     throw bad('Format not allowed. PDF, JPG, PNG and Word are accepted.', 'formato');
   }
 
+  /* Every accepted MIME type now has a real signature in FIRMAS, so the
+     bytes must actually match it — content that matches NO known
+     signature is rejected too, not just content that matches a
+     DIFFERENT one. Before this, plain text (or anything else) declared
+     as an accepted MIME type with no recognisable magic bytes slipped
+     through unchecked, because `real` was null and the old check only
+     fired when `real` was truthy. */
   const real = detectar(buffer);
   const esDocx = mimeDeclarado.includes('wordprocessingml') && real === 'application/zip';
-  if (real && real !== mimeDeclarado && !esDocx) {
+  if (real !== mimeDeclarado && !esDocx) {
     throw bad('The file contents do not match its extension', 'contenido');
   }
 

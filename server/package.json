@@ -16,7 +16,8 @@
     "dev:all": "bash dev.sh",
     "extractor:install": "python3 -m venv extractor/.venv && extractor/.venv/bin/pip install -r extractor/requirements.txt",
     "extractor": "extractor/.venv/bin/uvicorn extractor:app --app-dir extractor --port 8100",
-    "start": "node --env-file-if-exists=.env index.js"
+    "start": "node --env-file-if-exists=.env index.js",
+    "test": "node --env-file-if-exists=.env --test"
   },
   "dependencies": {
     "argon2": "^0.41.1",
