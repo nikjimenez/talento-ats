@@ -57,6 +57,13 @@ cd app
 npx serve -p 8080 --single
 ```
 
+No npm on the machine? Any static server works — the app has no build
+step and no path-based routing:
+
+```bash
+python3 -m http.server 8080 --directory app
+```
+
 Open `localhost:8080`. The console reports which source it connected to.
 
 **Running the two halves on different ports?** Set the API location in
@@ -66,6 +73,8 @@ a 404, and falls back to demo data without the backend ever being used:
 ```js
 API_ORIGIN: 'http://localhost:3000',
 ```
+
+This repository ships with that value already set for local development.
 
 Leave it empty in production, where both halves sit behind one origin.
 
