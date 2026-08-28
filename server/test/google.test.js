@@ -51,6 +51,10 @@ test.after(async () => {
   if (userId) {
     await query('DELETE FROM oauth_states WHERE user_id = $1', [userId]);
     await query('DELETE FROM oauth_credentials WHERE user_id = $1', [userId]);
+    /* desconectar() logs to audit_logs, which FKs to users with no
+       cascade — the disposable test user can't be deleted until its own
+       log rows are gone too. */
+    await query('DELETE FROM audit_logs WHERE user_id = $1', [userId]);
     await query('DELETE FROM users WHERE user_id = $1', [userId]);
   }
   await pool.end();
@@ -103,6 +107,24 @@ test('estado: a genuinely connected user reports state 3, with the account email
   assert.equal(out.conectado, true);
   assert.equal(out.revocado, false);
   assert.equal(out.cuenta, 'recruiter@example.invalid');
+});
+
+test('desconectar: a deliberate in-app disconnect reports state 2 (not connected), never state 4 (revoked) — the account was never rejected by Google, the user just clicked Disconnect', async (t) => {
+  if (!google.configurado()) return t.skip('GOOGLE_CLIENT_ID/SECRET not set in this environment');
+
+  await query('DELETE FROM oauth_credentials WHERE user_id = $1', [userId]);
+  await query(
+    `INSERT INTO oauth_credentials
+       (user_id, provider, account_email, access_encrypted, refresh_encrypted, scopes, expires_at)
+     VALUES ($1,'google','recruiter@example.invalid','x','x','calendar.events', now() + interval '1 hour')`,
+    [userId]);
+
+  await google.desconectar(userId, { actor: 'Test', ip: '127.0.0.1' });
+
+  const out = await google.estado(userId);
+  assert.equal(out.conectado, false);
+  assert.equal(out.revocado, false,
+    'a deliberate disconnect must not read as "may have been revoked from your Google account, or the password changed" — that message would be false');
 });
 
 /* cancelarEvento(): a real DB row with a genuinely encrypted (not the

@@ -213,9 +213,17 @@ export const estado = async (userId) => {
 };
 
 export const desconectar = async (userId, { actor, ip }) => {
+  /* A deliberate, in-app disconnect is not the same fact as estado()'s
+     "revocado" state — that one means Google itself rejected a refresh,
+     discovered lazily, and the UI tells the recruiter their authorisation
+     "may have been revoked... or the password changed", which would be
+     false here. Row deleted outright (not soft-revoked) so a reload
+     reports plain "not connected", the accurate state for a user who just
+     chose to disconnect. canjearCodigo()'s INSERT ... ON CONFLICT upsert
+     reconnects cleanly either way — the audit trail lives in the security
+     log below, not in a kept row. */
   await query(
-    `UPDATE oauth_credentials SET revoked_at = now()
-      WHERE user_id = $1 AND provider = 'google' AND revoked_at IS NULL`, [userId]);
+    `DELETE FROM oauth_credentials WHERE user_id = $1 AND provider = 'google'`, [userId]);
   await log({ event: 'Google Calendar disconnected', userId, username: actor, ip, severity: 'warn' });
   return { conectado: false };
 };
