@@ -863,8 +863,40 @@ const stub = (titulo, cuerpo, ic) => html`
 
 const STUBS = {};
 
+/**
+ * What is on screen structurally: which view, which record, and which
+ * overlay (dialog, palette, popover) is open. Two renders sharing a scene
+ * are the same screen being repainted in place — typing, toggling a
+ * filter, turning a page — not something new arriving, so the entry
+ * animations must not replay (see #app.is-repaint in base.css). A change
+ * here is a real entrance and animates as designed.
+ */
+const escena = (s) => [
+  !!s.auth, s.view, s.sel, s.selJob,
+  s.paletteOpen, s.notifOpen, s.userMenu, s.navOpen, s.forgotOpen,
+  s.scheduleFor, s.emailFor, s.evalFor,
+  s.userDialogOpen, s.jobDialogOpen, s.candDialogOpen,
+  /* resumeStep is part of the identity: that dialog genuinely swaps
+     between upload / processing / review screens. */
+  s.resumeDialogOpen, s.resumeStep,
+  s.resumeViewerFor, s.replaceResumeFor
+].join('|');
+
+let escenaAnterior = null;
+/* Which page is behind any overlay — coarser than the scene above, so
+   opening a dialog over a scrolled list does not count as leaving it. */
+let paginaAnterior = null;
+
 const render = () => {
   const s = { ...state, notifications: NOTIFS, canSalary: can('ver_salarios') };
+
+  const escenaActual = escena(s);
+  const repintado = escenaActual === escenaAnterior;
+  escenaAnterior = escenaActual;
+  /* Set on the container, which survives mount() — the children being
+     inserted match it immediately, so a suppressed animation never gets
+     a chance to paint even one frame. */
+  document.getElementById('app')?.classList.toggle('is-repaint', repintado);
 
   /* mount() replaces all of #app, so the focused field is destroyed on every
      keystroke. dom.js remembers which one fired the event and focus and
@@ -873,23 +905,33 @@ const render = () => {
 
   /* Same problem, one layer up: replacing #app also throws away how far
      the page (or an open dialog) was scrolled — a fresh subtree always
-     starts at scrollTop 0. Without this, typing anywhere while scrolled
-     down snaps the view back to the top on every keystroke, which reads
-     exactly like an unwanted page refresh even though nothing actually
-     reloaded. Captured by selector, not by element reference, since the
-     element itself won't survive the replace either.
-     Gated on `edited` — same signal the focus restore above already
-     uses — on purpose: this render might instead be a real navigation
-     (a different view, a dialog opening or closing), where jumping back
-     to wherever the PREVIOUS screen happened to be scrolled is wrong,
-     not a fix. Only a render that this exact keystroke caused should
-     hold the scroll position still. */
-  const SCROLL_SELECTORS = ['.view', '.dialog__body'];
-  const scrollPositions = edited
-    ? SCROLL_SELECTORS
-        .map((sel) => [sel, document.querySelector(sel)?.scrollTop])
-        .filter(([, top]) => top !== undefined)
-    : [];
+     starts at scrollTop 0. Without this, typing while scrolled down snaps
+     the content back to the top on every keystroke, which reads exactly
+     like an unwanted page refresh even though nothing reloaded. Captured
+     by selector, not by element reference, since the element itself won't
+     survive the replace either.
+
+     The two containers are kept on different conditions on purpose:
+
+     - `.view` (the page behind everything) holds its position for as long
+       as it is showing the same page, even while an overlay opens or
+       closes over it. Otherwise opening a dialog on top of a scrolled
+       list yanks that list to the top behind the dialog — the same
+       "it reloaded" flinch, just triggered by a click instead of a key.
+     - `.dialog__body` only holds within one unchanged scene: a different
+       dialog is genuinely different content and should start at its top. */
+  const paginaActual = [!!s.auth, s.view, s.sel, s.selJob].join('|');
+  const mismaPagina = paginaActual === paginaAnterior;
+  paginaAnterior = paginaActual;
+
+  const capturar = (sel) => {
+    const top = document.querySelector(sel)?.scrollTop;
+    return top === undefined ? [] : [[sel, top]];
+  };
+  const scrollPositions = [
+    ...(mismaPagina ? capturar('.view') : []),
+    ...(repintado ? capturar('.dialog__body') : [])
+  ];
 
   const restore = () => {
     /* Order matters: focusing an element that isn't fully visible makes

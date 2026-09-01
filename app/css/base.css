@@ -93,6 +93,22 @@ kbd {
 
 @keyframes fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* An entry animation should play when something actually enters — not
+   every time render() rebuilds #app in place. mount() replaces the whole
+   subtree on every state change, so each of these elements is a brand new
+   node on every keystroke and CSS replays its entrance from the start:
+   .view__inner drops to opacity 0 and slides 6px on every character
+   typed. Typing faster than --dur means it never finishes fading in at
+   all, which is the "the page flickers while I type" symptom. main.js
+   sets this class when the scene (view + open dialog/overlay) has not
+   changed — the element was already on screen and is only being
+   repainted — so genuine entrances still animate exactly as designed. */
+#app.is-repaint .view__inner,
+#app.is-repaint .dialog,
+#app.is-repaint .popover,
+#app.is-repaint .palette,
+#app.is-repaint .nav__scrim { animation: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes shake {
   0%, 100% { transform: none; } 20% { transform: translateX(-5px); }
