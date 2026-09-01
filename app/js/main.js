@@ -21,6 +21,7 @@ import { profileView, resumeViewerDialog, replaceResumeDialog } from './views/pr
 import { jobsView, jobDetailView, campaignsView, jobDialog, jobDefaults } from './views/jobs.js';
 import { paletteView, searchAll, flatRows } from './views/search.js';
 import { scheduleDialog, scheduleDefaults } from './views/schedule.js';
+import { emailDialog, emailDefaults } from './views/email.js';
 import { interviewsView, evalDialog, evalDefaults, CRITERIOS, RECOMENDACIONES } from './views/interviews.js';
 import { reportsView } from './views/reports.js';
 import { adminView, userDialog } from './views/admin.js';
@@ -212,6 +213,43 @@ registerActions({
   'sch-backdrop': (_a, _el, ev) => { if (!ev.target.closest('[data-stop]')) set({ scheduleFor: null }); },
   'sch-set': (v, el) => set({ scheduleForm: { ...state.scheduleForm, [el.dataset.arg]: v } }),
   'sch-toggle': (_v, el) => set({ scheduleForm: { ...state.scheduleForm, [el.dataset.arg]: el.checked } }),
+  'email-open': async (id) => {
+    const c = await repo.getCandidate(Number(id));
+    if (!c) return;
+    if (!c.email) { toast(`${c.nombre} has no email address on file.`); return; }
+    set({ emailFor: Number(id), emailForm: emailDefaults(c) });
+  },
+  'email-close': () => set({ emailFor: null }),
+  'email-backdrop': (_a, _el, ev) => { if (!ev.target.closest('[data-stop]')) set({ emailFor: null }); },
+  'em-set': (v, el) => set({ emailForm: { ...state.emailForm, [el.dataset.arg]: v } }),
+  'email-confirm': async () => {
+    const c = await repo.getCandidate(Number(state.emailFor));
+    const f = state.emailForm;
+    if (!c) return;
+
+    if (!f.asunto?.trim() || !f.cuerpo?.trim()) {
+      toast('Subject and message are both required.');
+      return;
+    }
+
+    if (isDemo) {
+      toast('Sending email needs the server running and a connected Google account.');
+      return;
+    }
+
+    try {
+      const r = await repo.sendEmail({
+        destinatario: c.email, asunto: f.asunto, cuerpo: f.cuerpo,
+        applicationId: c.aplicacionId, candidateId: c.id
+      });
+      if (r?.enviado === false) { toast(r.motivo || 'Could not send the email.'); return; }
+      set({ emailFor: null });
+      if (state.view === 'perfil' && state.sel === c.id) await openCandidate(c.id);
+      toast(`Email sent to ${c.email}`);
+    } catch (err) {
+      toast(`Not sent: ${err.message}`);
+    }
+  },
   /**
    * Real OAuth. The server builds the authorisation URL (with the one-shot
    * `state` it stores), and the browser goes to Google's own consent
@@ -761,6 +799,7 @@ document.addEventListener('click', (ev) => {
 /* Global keyboard */
 document.addEventListener('keydown', (ev) => {
   if (ev.key === 'Escape' && state.scheduleFor) { set({ scheduleFor: null }); return; }
+  if (ev.key === 'Escape' && state.emailFor) { set({ emailFor: null }); return; }
   if (ev.key === 'Escape' && state.evalFor) { set({ evalFor: null }); return; }
   if (ev.key === 'Escape' && state.userDialogOpen) { set({ userDialogOpen: false }); return; }
   if (ev.key === 'Escape' && state.jobDialogOpen) { set({ jobDialogOpen: false }); return; }
@@ -866,6 +905,7 @@ const render = () => {
     </div>
     ${s.paletteOpen ? raw(paletteView(s)) : ''}
     ${s.scheduleFor ? raw(scheduleDialog(s)) : ''}
+    ${s.emailFor ? raw(emailDialog(s)) : ''}
     ${s.evalFor ? raw(evalDialog(s)) : ''}
     ${s.userDialogOpen ? raw(userDialog(s)) : ''}
     ${s.jobDialogOpen ? raw(jobDialog(s)) : ''}

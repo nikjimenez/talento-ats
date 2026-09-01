@@ -275,6 +275,11 @@ const demo = {
     err.codigo = 'sin_servidor';
     throw err;
   },
+  async sendEmail() {
+    const err = new Error('Sending email needs the server running and a connected Google account.');
+    err.codigo = 'sin_servidor';
+    throw err;
+  },
 
   /* Resume parsing runs against a real Python service and real document
      storage — same reasoning as Google above: no honest local fake. */

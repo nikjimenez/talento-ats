@@ -23,6 +23,7 @@ const REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI
 
 const SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
+  'https://www.googleapis.com/auth/gmail.send',
   'https://www.googleapis.com/auth/userinfo.email'
 ].join(' ');
 
@@ -145,8 +146,12 @@ const correoDeCuenta = async (accessToken) => {
 /**
  * Devuelve un token de acceso válido, renovándolo si hace falta.
  * null si el usuario no ha conectado su cuenta.
+ *
+ * Exportada además de usarse aquí mismo: services/gmail.js la reutiliza
+ * en vez de duplicar el refresco de tokens para un scope distinto de la
+ * misma cuenta conectada.
  */
-const tokenVigente = async (userId) => {
+export const tokenVigente = async (userId) => {
   const c = await one(
     `SELECT * FROM oauth_credentials
       WHERE user_id = $1 AND provider = 'google' AND revoked_at IS NULL`, [userId]);

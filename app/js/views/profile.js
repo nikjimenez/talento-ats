@@ -267,7 +267,7 @@ export const profileView = (s) => {
 
         <div class="u-row u-wrap" style="gap:6px">
           <button class="btn btn--sm" data-action="whatsapp" data-arg="${c.id}">${raw(icon('whatsapp', 13))} WhatsApp</button>
-          <button class="btn btn--sm" data-action="pending" data-arg="correo">${raw(icon('mail', 13))} Email</button>
+          <button class="btn btn--sm" data-action="email-open" data-arg="${c.id}">${raw(icon('mail', 13))} Email</button>
           <button class="btn btn--sm" data-action="schedule" data-arg="${c.id}">${raw(icon('calendar', 13))} Schedule</button>
           ${siguiente && can('mover_etapa') ? raw(html`
             <button class="btn btn--primary btn--sm" data-action="move-stage" data-arg="${c.id}">Move to ${siguiente}</button>`) : ''}

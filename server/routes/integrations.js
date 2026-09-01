@@ -9,6 +9,7 @@
  */
 
 import * as google from '../services/google.js';
+import * as gmail from '../services/gmail.js';
 import * as wa from '../services/whatsapp.js';
 import * as interviews from '../services/interviews.js';
 import * as medical from '../services/medical.js';
@@ -149,6 +150,19 @@ export const routes = {
     const b = await readJson(req);
     send(res, 200, await wa.enviarPlantilla({
       plantilla: b.plantilla, telefono: b.telefono, variables: b.variables || {},
+      applicationId: b.applicationId, candidateId: b.candidateId,
+      actor: ctx(req).actor
+    }));
+  },
+
+  /* ═══ Email (Gmail, misma cuenta de Google que Calendar) ═══ */
+
+  'POST /api/v1/email/send': async (req, res) => {
+    requirePerm(req, 'editar_candidatos');
+    const b = await readJson(req);
+    send(res, 200, await gmail.enviarCorreo({
+      userId: ctx(req).userId,
+      destinatario: b.destinatario, asunto: b.asunto, cuerpo: b.cuerpo,
       applicationId: b.applicationId, candidateId: b.candidateId,
       actor: ctx(req).actor
     }));

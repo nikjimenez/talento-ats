@@ -520,6 +520,10 @@ export const api = {
 
   scheduleInterview: (payload) => request('/interviews', { method: 'POST', body: payload }),
 
+  /* ── Email (Gmail, the connected Google account) ── */
+
+  sendEmail: (payload) => request('/email/send', { method: 'POST', body: payload }),
+
   /* Google Calendar OAuth. The consent screen is Google's own page, so the
      browser is redirected to `url`; the server handles the callback and
      redirects back with ?google=… */

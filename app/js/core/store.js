@@ -50,6 +50,9 @@ export const state = {
   scheduleFor: null,
   scheduleForm: {},
   googleConnected: false,
+  /* Email compose (Gmail, the same connected Google account) */
+  emailFor: null,
+  emailForm: {},
   /* Fuller status for the Integrations settings page — the four states
      services/google.js's estado() now distinguishes: not configured by
      the admin, configured but never connected, connected, or connected
