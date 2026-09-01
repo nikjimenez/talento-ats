@@ -1,0 +1,34 @@
+# deploy/Caddyfile — reverse proxy used only for the single-origin hosted
+# deployment (Render's free tier). Not used in local development (see
+# README.md) or in any other deployment that already has a proxy in front.
+#
+# Why this exists: server/lib/http.js sets the session cookie with
+# SameSite=Strict, which the project rules forbid changing (it's existing
+# application behaviour, not deployment plumbing). A SameSite=Strict
+# cookie is only sent back on same-site requests, so the API and the
+# static frontend have to be reachable at the SAME origin. This proxy is
+# what makes that true on a host that only gives you one public port: it
+# serves app/ directly and forwards everything under /api/ and /health to
+# the Node process running alongside it in the same container. No
+# application file is modified to make this work.
+
+{
+	admin off
+}
+
+:{$PORT} {
+	handle /health {
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	handle /api/* {
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	handle {
+		root * /srv/app
+		file_server
+	}
+
+	encode gzip
+}
