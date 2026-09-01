@@ -6,6 +6,15 @@
 # in README.md — this script changes nothing about how the app itself runs.
 set -e
 
+# app/js/config.js's API_ORIGIN is documented (README.md) to be
+# 'http://localhost:3000' for local development and empty in production,
+# where the frontend and API share one origin — exactly this container's
+# setup. There's no build step to inject that per environment, so patch
+# only this deployed copy of the file (never the repo source app/ ships
+# from, which local development still reads unmodified) rather than
+# hardcoding a different value into the app itself.
+sed -i "s#API_ORIGIN: 'http://localhost:3000',#API_ORIGIN: '',#" /srv/app/js/config.js
+
 cd /srv/server
 
 # migrate.js is designed to run every boot: it records each applied
