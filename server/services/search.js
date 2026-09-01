@@ -49,12 +49,26 @@ const construirFiltro = (f, params = []) => {
     const texto = String(f.q).trim();
     const dig = soloDigitos(texto);
     const p = add(`%${texto.toLowerCase()}%`);
-    const d = add(dig || '\u0000');
+    /* Sentinel for "no digits in the query, skip the national-id/phone
+       checks". This used to be the JS escape for a NUL character —
+       looked like a plain 6-character placeholder in source, but a
+       template literal actually turns it into a real null byte, in
+       both the query text and the bound parameter. Postgres's wire
+       protocol can't carry that: it corrupted the connection outright
+       ("insufficient data left in message", 08P01) rather than simply
+       failing to match. Only a name-only search ever hit this branch —
+       any digit gives `dig` a real value — which is why it went
+       unnoticed: every search this project's tests (and this session's
+       manual testing) ever tried included a national id. '' works
+       correctly as the sentinel: dig is '' exactly when there were no
+       digits, so the comparison already does the right thing without
+       needing a value a real stripped id/phone could never equal. */
+    const d = add(dig || '');
     w.push(`(
       lower(immutable_unaccent(c.full_name)) LIKE lower(immutable_unaccent(${p}))
       OR lower(c.email) LIKE ${p}
-      OR (${d} <> '\u0000' AND regexp_replace(c.national_id, '\\D', '', 'g') LIKE ${d} || '%')
-      OR (${d} <> '\u0000' AND regexp_replace(c.phone, '\\D', '', 'g') LIKE '%' || ${d})
+      OR (${d} <> '' AND regexp_replace(c.national_id, '\\D', '', 'g') LIKE ${d} || '%')
+      OR (${d} <> '' AND regexp_replace(c.phone, '\\D', '', 'g') LIKE '%' || ${d})
       OR EXISTS (SELECT 1 FROM candidate_skills s
                   WHERE s.candidate_id = c.candidate_id
                     AND lower(immutable_unaccent(s.name)) LIKE lower(immutable_unaccent(${p})))
@@ -142,7 +156,9 @@ export const global = async (texto, { alcance } = {}) => {
 
   const like = `%${t.toLowerCase()}%`;
   const dig = soloDigitos(t);
-  const d = dig || '\u0000';
+  /* Same sentinel, same fix, same bug as construirFiltro() above — see
+     its comment. This copy is what the ⌘K palette actually calls. */
+  const d = dig || '';
 
   const [cands, jobs, emps, camps] = await Promise.all([
     query(
@@ -164,8 +180,8 @@ export const global = async (texto, { alcance } = {}) => {
          LEFT JOIN job_openings j ON j.job_id = a.job_id
         WHERE lower(immutable_unaccent(c.full_name)) LIKE lower(immutable_unaccent($1))
            OR lower(c.email) LIKE $1
-           OR ($2 <> '\u0000' AND regexp_replace(c.national_id,'\\D','','g') LIKE $2 || '%')
-           OR ($2 <> '\u0000' AND regexp_replace(c.phone,'\\D','','g') LIKE '%' || $2)
+           OR ($2 <> '' AND regexp_replace(c.national_id,'\\D','','g') LIKE $2 || '%')
+           OR ($2 <> '' AND regexp_replace(c.phone,'\\D','','g') LIKE '%' || $2)
            OR EXISTS (SELECT 1 FROM candidate_skills s
                        WHERE s.candidate_id = c.candidate_id
                          AND lower(immutable_unaccent(s.name)) LIKE lower(immutable_unaccent($1)))
