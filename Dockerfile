@@ -15,7 +15,9 @@
 # Build context must be the repository root.
 
 FROM caddy:2-alpine AS base
-RUN apk add --no-cache nodejs npm
+RUN apk add --no-cache nodejs npm libcap && \
+    (setcap -r /usr/bin/caddy || true) && \
+    apk del libcap
 
 FROM base AS server-deps
 WORKDIR /srv/server
