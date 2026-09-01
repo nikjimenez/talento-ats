@@ -7,6 +7,16 @@
 set -e
 
 cd /srv/server
+
+# migrate.js is designed to run every boot: it records each applied
+# migration's hash and skips anything already applied (server/migrate.js).
+# seed.js is likewise idempotent (ON CONFLICT DO NOTHING / equivalent
+# guards — see server/test/db-functions.test.js's "seed: is idempotent"
+# coverage), so running it on every boot is safe rather than a one-off
+# step that has to happen out of band.
+node --env-file-if-exists=.env migrate.js
+node --env-file-if-exists=.env seed.js
+
 PORT=3000 node --env-file-if-exists=.env index.js &
 NODE_PID=$!
 
