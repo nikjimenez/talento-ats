@@ -871,18 +871,57 @@ const render = () => {
      caret are restored here. */
   const edited = takeLastEdited();
 
+  /* Same problem, one layer up: replacing #app also throws away how far
+     the page (or an open dialog) was scrolled — a fresh subtree always
+     starts at scrollTop 0. Without this, typing anywhere while scrolled
+     down snaps the view back to the top on every keystroke, which reads
+     exactly like an unwanted page refresh even though nothing actually
+     reloaded. Captured by selector, not by element reference, since the
+     element itself won't survive the replace either.
+     Gated on `edited` — same signal the focus restore above already
+     uses — on purpose: this render might instead be a real navigation
+     (a different view, a dialog opening or closing), where jumping back
+     to wherever the PREVIOUS screen happened to be scrolled is wrong,
+     not a fix. Only a render that this exact keystroke caused should
+     hold the scroll position still. */
+  const SCROLL_SELECTORS = ['.view', '.dialog__body'];
+  const scrollPositions = edited
+    ? SCROLL_SELECTORS
+        .map((sel) => [sel, document.querySelector(sel)?.scrollTop])
+        .filter(([, top]) => top !== undefined)
+    : [];
+
   const restore = () => {
+    /* Order matters: focusing an element that isn't fully visible makes
+       the browser auto-scroll its container to reveal it, which would
+       silently undo the scrollTop restore below if this ran first —
+       preventScroll stops that native behaviour, and restoring scroll
+       after focus (not before) means it wins either way. */
     const target = s.paletteOpen ? { id: 'palette-input' } : edited;
-    if (!target) return;
-    const el = document.getElementById(target.id);
-    if (!el) return;
-    if (document.activeElement !== el) el.focus();
-    if (el.setSelectionRange) {
-      const a = target.start ?? el.value.length;
-      const b = target.end ?? a;
-      try { el.setSelectionRange(a, b); } catch { /* types without selection */ }
+    if (target) {
+      const el = document.getElementById(target.id);
+      if (el) {
+        if (document.activeElement !== el) el.focus({ preventScroll: true });
+        if (el.setSelectionRange) {
+          const a = target.start ?? el.value.length;
+          const b = target.end ?? a;
+          try { el.setSelectionRange(a, b); } catch { /* types without selection */ }
+        }
+      }
+      clearLastEdited();
     }
-    clearLastEdited();
+
+    const applyScroll = () => scrollPositions.forEach(([sel, top]) => {
+      const el = document.querySelector(sel);
+      if (el) el.scrollTop = top;
+    });
+    applyScroll();
+    /* setSelectionRange on a multi-line field can make the browser scroll
+       the caret's line into view within an ancestor container as its own,
+       separate layout pass — after this function returns, not something
+       the synchronous call above can preempt. One more pass next frame
+       corrects that without it being visible as a second jump. */
+    requestAnimationFrame(applyScroll);
   };
 
   if (!s.auth) {
