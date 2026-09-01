@@ -26,6 +26,12 @@ cd /srv/server
 node --env-file-if-exists=.env migrate.js
 node --env-file-if-exists=.env seed.js
 
+# The extractor is auxiliary by design (server/README.md: "If the
+# extractor goes down, the application carries on") — started here but
+# deliberately NOT part of the fatal watchdog below, unlike Node itself.
+/srv/server/extractor/.venv/bin/uvicorn extractor:app \
+  --app-dir /srv/server/extractor --host 127.0.0.1 --port 8100 --log-level warning &
+
 PORT=3000 node --env-file-if-exists=.env index.js &
 NODE_PID=$!
 
