@@ -7,11 +7,21 @@ import pg from 'pg';
 
 const { Pool } = pg;
 
+/* Hosted Postgres (Render, Heroku, …) requires TLS, and its certificate
+   is usually not in the default trust store the `pg` driver checks —
+   this is normal for those providers, not a misconfiguration. Strictly
+   opt-in: with neither signal present, behaviour is byte-for-byte what
+   it was before, which is what every local/self-managed Postgres setup
+   still needs (no TLS at all). */
+const tlsRequerido = /sslmode=require/i.test(process.env.DATABASE_URL || '')
+  || process.env.PGSSLMODE === 'require';
+
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgres://localhost:5432/talento_ats',
   max: Number(process.env.PG_POOL_MAX || 10),
   idleTimeoutMillis: 30_000,
-  connectionTimeoutMillis: 5_000
+  connectionTimeoutMillis: 5_000,
+  ...(tlsRequerido ? { ssl: { rejectUnauthorized: false } } : {})
 });
 
 pool.on('error', (err) => console.error('[db] unexpected pool error:', err.message));
