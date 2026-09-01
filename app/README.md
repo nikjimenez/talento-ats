@@ -1,8 +1,9 @@
 # Talento ATS — project structure
 
 Applicant tracking system for a recruitment operation in Colombia. This
-directory holds the application split by language and by responsibility,
-ready to be wired to a real backend.
+directory holds the frontend, split by language and by responsibility.
+It talks to the real backend in `../server` — see the repository root
+[README](../README.md) to run both halves together.
 
 ## How to run it
 
@@ -11,11 +12,19 @@ not work from `file://` because of the browser's origin policy).
 
 ```bash
 cd app
-python3 -m http.server 8000
-# open http://localhost:8000
+python3 -m http.server 8080
+# open http://localhost:8080
 ```
 
-Demo mode credentials: **Recruiter1** / **123456**.
+(`npx serve -p 8080 --single` works too — see the root README.)
+
+## Signing in
+
+- **Real backend running** (`CONFIG.DEMO_MODE` at its default, `'auto'`):
+  sign in with a real account — the seeded administrator is
+  `admin` / whatever you set `SEED_ADMIN_PASSWORD` to.
+- **No backend, or `DEMO_MODE: true`:** local data only, credentials
+  **Recruiter1** / **123456**. Nothing is saved to a server.
 
 ## Tree
 
@@ -60,6 +69,7 @@ app/
 │       ├── reports.js      Indicators with SVG charts.
 │       ├── admin.js        Users, role matrix and audit log.
 │       ├── schedule.js     Interview scheduling with Google Calendar.
+│       ├── settings.js     Settings → Integrations: connect/disconnect Google Calendar.
 │       └── search.js       Global search palette (⌘K).
 │
 └── sql/                    ── Language: SQL ──────────────────────────────
@@ -90,45 +100,36 @@ directly**. Everything goes through `data/repository.js`, whose functions
 are async even in demo mode. That is why connecting the backend does not
 force a rewrite of any view.
 
-## Going to production
+## Demo mode vs. the real backend
 
-1. In `js/config.js`, set `DEMO_MODE: false` and point `API_BASE` at the server.
-2. Implement in the backend the endpoints the `api` object already declares
-   at the end of `repository.js`. The response field names must match what
-   the interface consumes.
-3. Delete `data/mock-db.js` and `data/sql-parser.js`: they stop being used.
-4. Serve `app/` as static files behind the same domain as the API.
+This directory can run two ways — see `js/config.js` → `CONFIG.DEMO_MODE`:
 
-The full phased plan lives in `Backend — Plan de implementación.dc.html`,
-at the root of the project.
+- **With the real backend** (`'auto'`, the default, or `false`): every
+  screen talks to `../server` over `data/api.js`. This is the normal way
+  to run the application — see the root [README](../README.md).
+- **Without one** (`DEMO_MODE: true`, or `'auto'` when the server isn't
+  answering `/health`): `data/mock-db.js` and `data/sql-parser.js` serve
+  local data instead, so the interface can be reviewed without standing up
+  PostgreSQL. A handful of actions that need a server to mean anything
+  (WhatsApp, real email, password recovery) show a clear notice instead of
+  failing silently.
 
-## What does not exist without a backend
-
-These actions show a notice naming the phase of the plan that enables them,
-rather than failing silently: exports, editing an opening, the creation
-forms for openings and candidates, WhatsApp, email, password recovery,
-user editing and MFA.
-
-All eight modules are built. What is still simulated in the browser: the
-interview evaluation and the new user are kept in memory only, the audit
-log is a fixed list, and the permission matrix hides interface but blocks
-nothing — the server does that (phase 5).
+Either way **views never touch data directly** — everything goes through
+`data/repository.js`, a proxy that delegates to whichever source is
+active. That's what let the real backend get connected without changing a
+single view.
 
 ### Scheduling with Google Calendar
 
-The interview scheduling dialog is complete in `js/views/schedule.js`:
-type, date, time, duration, format, calendar, attendees, note and the
-three notification channels for the candidate. The only missing piece is
-the server:
-
-1. Register the application in Google Cloud with the `calendar.events` and
-   `calendar.readonly` scopes.
-2. Implement `googleAuthUrl()` and `scheduleInterview()` in `repository.js`.
-   The refresh token is stored on the server, **never** in the browser.
-3. On confirmation the server creates the event with the candidate as an
-   attendee; Google sends the email invitation and generates the Meet link.
-
-Every scheduling action already writes its event to the candidate's timeline.
+`js/views/schedule.js` is the interview scheduling dialog: type, date,
+time, duration, format, attendees, note and the three notification
+channels for the candidate. Against the real backend, confirming it calls
+`server/services/google.js`, which creates a real Google Calendar event
+(with the candidate as an attendee) and a real Meet link on the connected
+recruiter's own calendar — see the root README's [Google Calendar
+setup](../README.md#google-calendar-setup) for how to configure that.
+Every recruiter connects their own account from Settings → Integrations
+(`js/views/settings.js`); nothing is shared or hardcoded.
 
 ## Conventions
 

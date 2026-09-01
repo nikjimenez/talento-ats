@@ -23,7 +23,7 @@ does not need to bring up PostgreSQL.
 cd server
 cp .env.example .env          # fill in DATABASE_URL and SEED_ADMIN_PASSWORD
 npm install && createdb talento_ats
-npm run setup                 # runs the 8 migrations and loads the seeds
+npm run setup                 # runs the 10 migrations and loads the seeds
 npm run dev:all               # Node on :3000 + Python extractor on :8100
 
 # 2 · Frontend, on the same origin so the cookie travels
@@ -138,20 +138,20 @@ says up front that no email is sent.
 **Tolerant boot.** If one source fails, its view is left empty and the
 others still load. An empty table with a warning beats a blank screen.
 
-## What still needs testing against real data
+## Status
 
-None of this can be verified without a populated database:
+Everything listed above as "what still needs testing" and "what comes
+next" at the time this document was first written has since happened:
+the opening and candidate creation forms live in `app/`, phase 7 (Google
+Calendar, WhatsApp, medical exam, e-signature) is built and — for Google
+Calendar — verified against a real account end to end, and the sections
+above (routes, envelope shape, permissions, absent-vs-empty) describe the
+integration as it stands today, not a plan. `server/README.md` has the
+authoritative phase-by-phase detail; the root [README](../README.md) has
+setup instructions, including [Google Calendar
+setup](../README.md#google-calendar-setup).
 
-- ⌘K search performance at a realistic record count
-- That the filter facets agree with the list total
-- Creating an opening and a candidate end to end (the forms live in the
-  previous version of the prototype, not in `app/`)
-- Duplicate detection against the seed's real national ids
-- Document upload and preview
-- CV extraction with genuine documents
-
-## What comes next
-
-1. Populate the database and walk the six views with real data
-2. Port the opening and candidate creation forms to `app/`
-3. Phase 7: WhatsApp, Google Calendar on the server, medical exam, signature
+This file is kept as a record of what connecting the two halves actually
+surfaced — real mismatches a design review of either side alone would not
+have caught — which is why it's written the way it is rather than
+rewritten into a plain status page.

@@ -36,8 +36,10 @@ desktop.ini
 *.swp
 *~
 
-# Claude Code local settings — machine-specific, may carry personal details
-.claude/settings.local.json
+# Claude Code local settings and dev-server launch config — machine-specific
+# (hardcoded absolute paths to this developer's local toolchain), not needed
+# to run the application. See README.md for the portable equivalent.
+.claude/
 
 # Local storage for uploaded documents (phase 6)
 # services/storage.js writes to <cwd>/.storage unless STORAGE_PATH is set
