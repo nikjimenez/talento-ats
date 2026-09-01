@@ -5,29 +5,31 @@
 # application code, only how it's packaged for this kind of host. Local
 # development doesn't use this file at all; see README.md.
 #
-# Node comes from the official node:20-alpine image throughout (the same
-# image node_modules is built against), and the Caddy binary is copied
-# from Caddy's own official image rather than installed via a package
-# manager, so there's no risk of a Node/native-addon ABI mismatch or an
-# unpinned Caddy version. Build context must be the repository root.
+# Both stages build FROM THE SAME caddy:2-alpine base, with Node added via
+# apk in that exact base, rather than copying a binary in from an unrelated
+# image — some sandboxed container runtimes (this one included) refuse to
+# exec a binary that arrived via a cross-image COPY --from with
+# "Operation not permitted", even after chmod +x. Installing everything
+# through the base image's own package manager avoids that entirely, and
+# also means node_modules is built and run against the exact same Node.
+# Build context must be the repository root.
 
-FROM node:20-alpine AS server-deps
+FROM caddy:2-alpine AS base
+RUN apk add --no-cache nodejs npm
+
+FROM base AS server-deps
 WORKDIR /srv/server
 COPY server/package.json server/package-lock.json ./
 RUN npm ci --omit=dev
 
-FROM caddy:2-alpine AS caddy-bin
-
-FROM node:20-alpine
-COPY --from=caddy-bin /usr/bin/caddy /usr/local/bin/caddy
-
+FROM base
 WORKDIR /srv
 COPY --from=server-deps /srv/server/node_modules ./server/node_modules
 COPY server ./server
 COPY app ./app
 COPY deploy/Caddyfile /etc/caddy/Caddyfile
 COPY deploy/start.sh /srv/start.sh
-RUN chmod +x /srv/start.sh /usr/local/bin/caddy
+RUN chmod +x /srv/start.sh
 
 ENV NODE_ENV=production
 EXPOSE 10000
